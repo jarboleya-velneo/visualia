@@ -257,7 +257,7 @@
   </div>
 
   <div class="card panel" style="margin-bottom:16px">
-    <div class="phead"><div><h2>Resultado por cliente</h2><p class="hint" id="cliHint">Ingresos − gastos directos − indirectos repartidos por facturación</p></div></div>
+    <div class="phead"><div><h2>Resultado por cliente</h2><p class="hint" id="cliHint">Ingresos − directos − indirectos repartidos por facturación (sin costes de personal)</p></div></div>
     <div class="twrap">
       <table id="cliTable">
         <thead><tr><th>Cliente</th><th class="r">Ingresos</th><th class="r">Directos</th><th class="r">Indirectos (cuota)</th><th class="r">Neto</th><th class="r">Margen</th></tr></thead>
@@ -272,6 +272,9 @@
       <input type="search" id="fltQ" placeholder="Buscar concepto, cliente, proveedor…">
       <select id="fltTipo"><option value="">Todos</option><option value="ingreso">Ingresos</option><option value="gasto">Gastos</option></select>
       <select id="fltNat"><option value="">Directos e indirectos</option><option value="directo">Directos</option><option value="indirecto">Indirectos</option></select>
+      <select id="fltCliente"></select>
+      <select id="fltProveedor"></select>
+      <select id="fltCat"></select>
     </div>
     <div class="bulkbar" id="bulkBar">
       <span id="bulkCount"></span><span class="spacer"></span>
@@ -646,7 +649,7 @@
     state.items.forEach(function(it){ var s=sumPairs(it,pairs); if(!s)return;
       if(it.tipo==="ingreso"){ var k=it.cliente||"— sin cliente"; by[k]=by[k]||{ing:0,dir:0}; by[k].ing+=s; ingTot+=s; }
       else if(natDe(it)==="directo"){ var k2=it.cliente||"— sin cliente"; by[k2]=by[k2]||{ing:0,dir:0}; by[k2].dir+=s; }
-      else ind+=s; });
+      else if(!esPersonal(it.categoria)) ind+=s; }); // los costes de personal (nóminas) no se reparten
     return {by:by,ind:ind,ingTot:ingTot};
   }
 
@@ -661,7 +664,7 @@
     var nV=Math.max(1,state.masters.personas.length),ANV=arrNet(pairs)/nV,ANVp=arrNet(prev)/nV;
     $("#ivgYear").textContent=ia?(PL+" — con los ingresos y gastos actuales"):("Ejercicio "+Y+(state.quarter?" · T"+state.quarter+" resaltado":""));
     $("#donutHint").textContent="Por categoría · "+PL;
-    $("#cliHint").textContent="Ingresos − gastos directos − indirectos repartidos por facturación · "+PL;
+    $("#cliHint").textContent="Ingresos − directos − indirectos repartidos por facturación (sin costes de personal) · "+PL;
     $("#budHint").textContent="Ejecución por categoría · "+PL+(state.quarter?" (anuales prorrateados)":"");
     $("#kpis").innerHTML=
       kpi("hero","ARR neto × ViMi",eur(ANV),"ARR − costes recurrentes sin nóminas, entre "+nV+" ViMi"+(nV===1?"":"s"),delta(ANV,ANVp),"var(--brass)")+
@@ -670,7 +673,7 @@
       kpi("","Ingresos",eur(ingT),"Facturado · "+PL,delta(ingT,ingP))+
       kpi("","Costes directos",eur(dirT),"Ligados a cliente",delta(dirT,dirP,true))+
       kpi("","Costes indirectos",eur(indT),"Estructura",delta(indT,indP,true));
-    chartIVG(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs); clients(pairs); movTable();
+    chartIVG(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs); clients(pairs); fillMovFilters(); movTable();
   }
   function kpi(cls,lab,val,sub,d,accent){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div><div class="sub">'+d+' '+sub+'</div></div>'; }
   function delta(cur,prev,inv){ if(!prev)return '<span class="delta flat">nuevo</span>'; var ch=(cur-prev)/Math.abs(prev)*100,up=ch>=0,good=inv?!up:up,cls=Math.abs(ch)<0.5?"flat":(good?"up":"down"),ar=Math.abs(ch)<0.5?"→":(up?"▲":"▼"); return '<span class="delta '+cls+'">'+ar+' '+pctf(ch)+'</span>'; }
@@ -791,7 +794,7 @@
   }
 
   // ---- tabla de movimientos: filtros + multiselección ----
-  var selected={}, fltQ="", fltTipo="", fltNat="";
+  var selected={}, fltQ="", fltTipo="", fltNat="", fltCliente="", fltProveedor="", fltCat="";
   function selCount(){ return Object.keys(selected).length; }
   function visibleItems(){
     var pairs=selPairs(), q=fltQ.toLowerCase();
@@ -801,9 +804,21 @@
       if(!act) return false;
       if(fltTipo&&it.tipo!==fltTipo) return false;
       if(fltNat&&(it.tipo!=="gasto"||natDe(it)!==fltNat)) return false;
+      if(fltCliente&&(it.cliente||"")!==(fltCliente==="__sin__"?"":fltCliente)) return false;
+      if(fltProveedor&&(it.proveedor||"")!==fltProveedor) return false;
+      if(fltCat&&it.categoria!==fltCat) return false;
       if(q){ var hay=[it.concepto,it.cliente,it.proveedor,it.persona,it.categoria].join(" ").toLowerCase(); if(hay.indexOf(q)<0)return false; }
       return true;
     });
+  }
+  function fillMovFilters(){
+    var opt=function(v,l,sel){return '<option value="'+esc(v)+'"'+(v===sel?" selected":"")+'>'+esc(l)+'</option>';};
+    var setSel=function(id,primero,vals,sel,extra){
+      var el=$(id),h=opt("",primero,sel)+(extra||"");
+      vals.forEach(function(v){h+=opt(v,v,sel);}); el.innerHTML=h; };
+    setSel("#fltCliente","Cliente: todos",mNames("clientes"),fltCliente,'<option value="__sin__"'+(fltCliente==="__sin__"?" selected":"")+'>— sin cliente —</option>');
+    setSel("#fltProveedor","Proveedor: todos",mNames("proveedores"),fltProveedor);
+    setSel("#fltCat","Tipo: todos",mNames("categoriasGasto").concat(mNames("categoriasIngreso")),fltCat);
   }
   function movTable(){
     var rows=visibleItems().sort(function(a,b){return (a.tipo>b.tipo?1:a.tipo<b.tipo?-1:0)||(b.importe-a.importe);});
@@ -822,7 +837,13 @@
         '<td>'+freqTag+'</td><td class="r">'+eur2(it.importe)+'</td><td class="r"><b>'+eur2(annual)+'</b></td>'+
         '<td class="r"><span class="rowacts"><button class="rowact edit" data-id="'+it.id+'" title="Editar">✎</button><button class="rowact dup" data-id="'+it.id+'" title="Duplicar">⧉</button><button class="rowact del" data-id="'+it.id+'" title="Eliminar">✕</button></span></td></tr>';
     }).join("")||'<tr><td colspan="8" style="color:var(--ink-3)">Sin movimientos que cumplan el filtro.</td></tr>';
-    $("#movCount").textContent=rows.length+" líneas · "+periodLabel()+(fltQ||fltTipo||fltNat?" · filtrado":"");
+    if(rows.length){
+      var tImp=0,tAn=0;
+      rows.forEach(function(it){ tImp+=it.importe; tAn+=(it.freq==="recurrente"?arr12(it):it.importe); });
+      $("#movBody").innerHTML+='<tr style="border-top:2px solid var(--line-strong);cursor:default"><td></td><td><b>Total · '+rows.length+' líneas</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tImp)+'</b></td><td class="r"><b>'+eur2(tAn)+'</b></td><td></td></tr>';
+    }
+    var filtrado=fltQ||fltTipo||fltNat||fltCliente||fltProveedor||fltCat;
+    $("#movCount").textContent=rows.length+" líneas · "+periodLabel()+(filtrado?" · filtrado":"");
     $$("#movBody tr[data-id]").forEach(function(tr){
       tr.addEventListener("click",function(e){ if(e.target.closest(".rowact")||e.target.closest(".rowchk"))return; openEdit(tr.dataset.id); });
     });
@@ -1160,6 +1181,9 @@
   $("#fltQ").addEventListener("input",function(){ fltQ=this.value; movTable(); });
   $("#fltTipo").addEventListener("change",function(){ fltTipo=this.value; movTable(); });
   $("#fltNat").addEventListener("change",function(){ fltNat=this.value; movTable(); });
+  $("#fltCliente").addEventListener("change",function(){ fltCliente=this.value; movTable(); });
+  $("#fltProveedor").addEventListener("change",function(){ fltProveedor=this.value; movTable(); });
+  $("#fltCat").addEventListener("change",function(){ fltCat=this.value; movTable(); });
   $("#chkAll").addEventListener("click",function(){ var on=this.checked;
     $$(".rowchk").forEach(function(c){ if(on)selected[c.dataset.id]=1; else delete selected[c.dataset.id]; }); movTable(); });
   $("#bulkDel").onclick=function(){ removeItems(Object.keys(selected)); };

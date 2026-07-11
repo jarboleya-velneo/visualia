@@ -63,7 +63,7 @@ Cada fila es un ingreso o gasto. Columnas (iguales en la hoja *Movimientos* y en
 
 - **Recurrente** = una sola fila que cuenta un apunte **cada `periodicidad` meses** dentro del rango: no se mete mes a mes. Un gasto trimestral es `freq=recurrente, periodicidad=3`.
 - **Puntual con «repetir N»** = genera N apuntes de golpe, separados según la periodicidad elegida (p. ej. 6 cuotas mensuales o 4 pagos trimestrales), editables uno a uno.
-- **Directo** (ligado a un cliente: AWS, Claude API, WealthReader) vs **Indirecto** (estructura: nóminas, Claude Max, Wispr). El panel **Resultado por cliente** reparte los indirectos entre clientes **en proporción a la facturación** de cada uno en el periodo.
+- **Directo** (ligado a un cliente: AWS, Claude API, WealthReader) vs **Indirecto** (estructura: nóminas, Claude Max, Wispr). El panel **Resultado por cliente** reparte los indirectos entre clientes **en proporción a la facturación** de cada uno en el periodo, **excluyendo los costes de personal** (categorías marcadas como tal): mide la rentabilidad operativa por cliente. El Resultado neto global sí incluye nóminas.
 
 Otras pestañas de la hoja:
 
@@ -74,6 +74,7 @@ Otras pestañas de la hoja:
 ## Trabajar con la tabla de movimientos
 
 - **Filtros**: ejercicio (segmento de años) + periodo (Año / T1–T4 / **12m**) + búsqueda de texto + tipo + naturaleza. El periodo recalcula KPIs, gráficas, desglose, conceptos, clientes y presupuesto. **12m = vista interanual**: los próximos 12 meses desde hoy manteniendo los ingresos y gastos actuales (cruza ejercicios; el presupuesto mezcla los dos años que toca).
+- **Filtros adicionales**: cliente (incluye «— sin cliente —»), proveedor y tipo/categoría, combinables con el resto. La rejilla muestra una fila de **totales** (importe y anual equivalente) de lo filtrado.
 - **Multiselección**: marca las casillas (o «seleccionar todo») y aparece la barra de acciones: **✎ Editar** (en lote: categoría, cliente, proveedor, naturaleza — solo se aplican los campos que cambies), **⧉ Duplicar** y **✕ Eliminar**.
 
 ## Los KPIs
