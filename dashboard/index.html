@@ -224,11 +224,12 @@
 
   <div class="grid2">
     <div class="card panel">
-      <div class="phead"><div><h2>Ingresos vs. gastos por mes</h2><p class="hint" id="ivgYear"></p></div></div>
+      <div class="phead"><div><h2>Ingresos, gastos y resultado por mes</h2><p class="hint" id="ivgYear"></p></div></div>
       <div id="chartIVG"></div>
       <div class="legend">
         <span><i class="dot" style="background:var(--income)"></i> Ingresos</span>
         <span><i class="dot" style="background:var(--expense)"></i> Gastos</span>
+        <span><i class="dot" style="background:var(--accent)"></i> Resultado</span>
       </div>
     </div>
     <div class="card panel"><h2>Desglose de costes</h2><p class="hint" id="donutHint">Por categoría</p><div id="chartDonut"></div></div>
@@ -238,21 +239,20 @@
     <div class="card panel"><h2>Resultado neto acumulado</h2><p class="hint">Ingresos − costes directos − indirectos, mes a mes</p><div id="chartNet"></div></div>
     <div class="card panel">
       <div class="phead"><div><h2>Presupuesto vs. real</h2><p class="hint" id="budHint">Ejecución del ejercicio por categoría</p></div>
-        <button class="btn ghost" id="budEditBtn">✎ Presupuesto</button></div>
+        <button class="btn primary" id="budEditBtn">✎ Editar presupuesto</button></div>
+      <div id="chartBud"></div>
+      <div class="legend" style="margin-bottom:12px"><span><i class="dot" style="background:var(--income)"></i> Ingresos reales</span><span><i class="dot" style="background:var(--expense)"></i> Gastos reales</span><span><i class="dot" style="background:var(--income);height:3px;border-radius:2px;width:14px"></i> Ppto. ingresos</span><span><i class="dot" style="background:var(--expense);height:3px;border-radius:2px;width:14px"></i> Ppto. gastos</span></div>
       <div id="budget"></div>
     </div>
   </div>
 
   <div class="card panel" style="margin-bottom:16px">
     <div class="phead"><div><h2>Gastos por concepto</h2><p class="hint" id="conHint">Cuánto cuesta cada cosa · mensual equivalente y total del periodo</p></div></div>
-    <div class="grid2" style="margin-bottom:0">
-      <div class="twrap">
-        <table id="conTable">
-          <thead><tr><th>Concepto</th><th>Proveedor</th><th></th><th class="r">Mes equiv.</th><th class="r">Periodo</th><th class="r">%</th></tr></thead>
-          <tbody id="conBody"></tbody>
-        </table>
-      </div>
-      <div id="chartCon"></div>
+    <div class="twrap">
+      <table id="conTable">
+        <thead><tr><th>Concepto</th><th>Proveedor</th><th></th><th class="r">Mes equiv.</th><th class="r">Periodo</th><th class="r">%</th></tr></thead>
+        <tbody id="conBody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -684,7 +684,7 @@
       kpi("","Ingresos",eur(ingT),"Facturado · "+PL,delta(ingT,ingP))+
       kpi("","Costes directos",eur(dirT),"Ligados a cliente",delta(dirT,dirP,true))+
       kpi("","Costes indirectos",eur(indT),"Estructura",delta(indT,indP,true));
-    chartIVG(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs,s,chartPairs); clients(pairs); fillMovFilters(); movTable();
+    chartLines(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs); clients(pairs); fillMovFilters(); movTable();
   }
   function kpi(cls,lab,val,sub,d,accent){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div><div class="sub">'+d+' '+sub+'</div></div>'; }
   function delta(cur,prev,inv){ if(!prev)return '<span class="delta flat">nuevo</span>'; var ch=(cur-prev)/Math.abs(prev)*100,up=ch>=0,good=inv?!up:up,cls=Math.abs(ch)<0.5?"flat":(good?"up":"down"),ar=Math.abs(ch)<0.5?"→":(up?"▲":"▼"); return '<span class="delta '+cls+'">'+ar+' '+pctf(ch)+'</span>'; }
@@ -745,16 +745,45 @@
       s+=Array.isArray(b)?(+b[p.m]||0):b/12; });
     return s; }
   function budAnual(b){ return Array.isArray(b)?b.reduce(function(a,x){return a+(+x||0);},0):(+b||0); }
+  function budMonthCat(cat,p){ var b=yearBudget(p.Y)[cat]; if(b==null)return 0; return Array.isArray(b)?(+b[p.m]||0):b/12; }
+  function chartBud(pairs){
+    var n=pairs.length,s=seriesPairs(pairs);
+    var bIng=pairs.map(function(p){ var t=0; mNames("categoriasIngreso").forEach(function(c){t+=budMonthCat(c,p);}); return t; });
+    var bGas=pairs.map(function(p){ var t=0; mNames("categoriasGasto").forEach(function(c){t+=budMonthCat(c,p);}); return t; });
+    if(!bIng.some(function(v){return v>0;})&&!bGas.some(function(v){return v>0;})){ $("#chartBud").innerHTML='<p class="hint">Sin presupuesto definido para este periodo — pulsa «✎ Editar presupuesto».</p>'; return; }
+    var W=520,H=190,padL=44,padR=8,padT=10,padB=26,iw=W-padL-padR,ih=H-padT-padB;
+    var max=Math.max(1,Math.max.apply(null,s.ing),Math.max.apply(null,s.gas),Math.max.apply(null,bIng),Math.max.apply(null,bGas));
+    var step=niceStep(max),top=Math.ceil(max/step)*step,gw=iw/n,bw=Math.min(12,(gw-6)/2),g="";
+    for(var t=0;t<=top;t+=step){ var y=padT+ih-(t/top)*ih; g+='<line class="grid-line" x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'"/>'; g+='<text class="axis-num" x="'+(padL-6)+'" y="'+(y+3)+'" text-anchor="end">'+(t/1000)+'k</text>'; }
+    var Yv=function(v){return padT+ih-(v/top)*ih;},Xc=function(i){return padL+gw*i+gw/2;};
+    for(var m=0;m<n;m++){ var lb=pairLab(pairs[m],m),hi=(s.ing[m]/top)*ih,hg=(s.gas[m]/top)*ih;
+      g+=bar(Xc(m)-bw-1,padT+ih-hi,bw,hi,"var(--income)",lb,"Ingresos reales",s.ing[m]);
+      g+=bar(Xc(m)+1,padT+ih-hg,bw,hg,"var(--expense)",lb,"Gastos reales",s.gas[m]);
+      g+='<text class="axis" x="'+Xc(m)+'" y="'+(H-8)+'" text-anchor="middle">'+lb+'</text>'; }
+    var linea=function(arr,color){ var d=""; arr.forEach(function(v,i){ d+=(i?" L":"M")+Xc(i)+" "+Yv(v); });
+      return '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>'; };
+    g+=linea(bIng,"var(--income)")+linea(bGas,"var(--expense)");
+    pairs.forEach(function(p,i){ g+='<circle cx="'+Xc(i)+'" cy="'+Yv(bGas[i])+'" r="8" fill="transparent" style="cursor:pointer" data-tip="<b>'+pairLab(p,i)+'</b> · presupuesto<br>Ingresos <b>'+eur2(bIng[i])+'</b><br>Gastos <b>'+eur2(bGas[i])+'</b>"/>'; });
+    g+='<line class="baseline" x1="'+padL+'" y1="'+(padT+ih)+'" x2="'+(W-padR)+'" y2="'+(padT+ih)+'"/>';
+    $("#chartBud").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Presupuesto vs real por mes">'+g+'</svg>';
+    wireTips("#chartBud");
+  }
   function budget(pairs){
+    chartBud(pairs);
     var real=catTotals(pairs),inc=incTotals(pairs);
-    var rows=[];
-    mNames("categoriasIngreso").forEach(function(k){ var r=inc[k]||0,bud=budForPairs(k,pairs); if(r||bud)rows.push({k:k,real:r,bud:bud,good:true}); });
-    mNames("categoriasGasto").forEach(function(k){ var r=real[k]||0,bud=budForPairs(k,pairs); if(r||bud)rows.push({k:k,real:r,bud:bud,good:false}); });
-    $("#budget").innerHTML=rows.map(function(r){ var bud=r.bud,frac=bud>0?r.real/bud:0,over=frac>1;
-      var color=r.good?(frac>=1?"var(--good)":"var(--accent)"):(over?"var(--crit)":(frac>0.9?"var(--warn)":"var(--s1)")),w=Math.min(100,frac*100);
-      var badge=r.good?(frac>=1?'<span class="delta up">✓ objetivo</span>':'<span class="delta flat">'+Math.round(frac*100)+'%</span>'):(over?'<span class="delta down">↑ '+Math.round((frac-1)*100)+'% sobre</span>':'<span class="delta flat">'+Math.round(frac*100)+'%</span>');
-      return '<div class="budrow"><span class="cat">'+esc(r.k)+'</span><span class="amt num">'+eur(r.real)+' / '+eur(bud)+' '+badge+'</span><div class="track"><i style="width:'+w+'%;background:'+color+'"></i></div></div>';
-    }).join("")||'<p class="hint">Define presupuestos (✎) para ver la ejecución.</p>';
+    var html="",hay=false;
+    [["Ingresos · objetivo","categoriasIngreso",inc,true],["Gastos · límite","categoriasGasto",real,false]].forEach(function(sec){
+      var rows=mNames(sec[1]).map(function(k){ return {k:k,real:sec[2][k]||0,bud:budForPairs(k,pairs),good:sec[3]}; })
+        .filter(function(r){return r.real||r.bud;});
+      if(!rows.length)return; hay=true;
+      html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin:12px 0 10px">'+sec[0]+'</div>';
+      html+=rows.map(function(r){ var bud=r.bud,frac=bud>0?r.real/bud:0,over=frac>1;
+        var color=r.good?(frac>=1?"var(--good)":"var(--accent)"):(over?"var(--crit)":(frac>0.9?"var(--warn)":"var(--s1)")),w=Math.min(100,frac*100);
+        var badge=bud<=0?'<span class="delta flat">sin ppto.</span>':(r.good?(frac>=1?'<span class="delta up">✓ objetivo</span>':'<span class="delta flat">'+Math.round(frac*100)+'%</span>'):(over?'<span class="delta down">↑ '+Math.round((frac-1)*100)+'% sobre</span>':'<span class="delta flat">'+Math.round(frac*100)+'%</span>'));
+        return '<div class="budrow"><span class="cat">'+esc(r.k)+'</span><span class="amt num">'+eur(r.real)+' / '+eur(bud)+' '+badge+'</span><div class="track"><i style="width:'+w+'%;background:'+color+'"></i></div></div>';
+      }).join("");
+    });
+    $("#budget").innerHTML=hay?html:'<p class="hint">Define presupuestos (✎ Editar presupuesto) para ver la ejecución por tipo.</p>';
   }
 
   function conceptTotals(pairs){ // gasto por concepto en el periodo (+ mensual equivalente)
@@ -770,7 +799,7 @@
     });
     return by;
   }
-  function conceptos(pairs,series,cpairs){
+  function conceptos(pairs){
     var by=conceptTotals(pairs),keys=Object.keys(by).sort(function(a,b){return by[b].total-by[a].total;});
     $("#conHint").textContent="Cuánto cuesta cada cosa · mensual equivalente, total y peso · "+periodLabel();
     if(!keys.length){ $("#conBody").innerHTML='<tr><td colspan="6" style="color:var(--ink-3)">Sin gastos en el periodo.</td></tr>'; }
@@ -781,11 +810,11 @@
         return '<tr><td><b>'+esc(k)+'</b></td><td>'+esc(o.proveedor||"—")+'</td><td>'+natTag+'</td><td class="r">'+eur2(o.mes)+'</td><td class="r"><b>'+eur2(o.total)+'</b></td><td class="r">'+(Math.round(p*10)/10).toLocaleString("es-ES")+'%</td></tr>';
       }).join("")+'<tr style="border-top:2px solid var(--line-strong)"><td><b>Total</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tot)+'</b></td><td class="r"><b>100%</b></td></tr>';
     }
-    chartLines(series,cpairs);
   }
   // Líneas mes a mes: ingresos, gastos y resultado
-  function chartLines(s,cpairs){
-    var W=480,H=280,padL=48,padR=10,padT=14,padB=40,iw=W-padL-padR,ih=H-padT-padB,n=cpairs.length;
+  function chartLines(s,cpairs,sel){
+    sel=sel||"#chartIVG";
+    var W=560,H=230,padL=48,padR=10,padT=14,padB=30,iw=W-padL-padR,ih=H-padT-padB,n=cpairs.length;
     var res=s.ing.map(function(v,i){return v-s.gas[i];});
     var mx=Math.max(1,Math.max.apply(null,s.ing),Math.max.apply(null,s.gas),Math.max.apply(null,res));
     var mn=Math.min(0,Math.min.apply(null,res));
@@ -793,15 +822,15 @@
     var X=function(i){return padL+iw*(i/(n-1));},Yv=function(v){return padT+ih-((v-bot)/rng)*ih;},g="";
     for(var t=bot;t<=top;t+=step){ var y=Yv(t); g+='<line class="grid-line" x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'"/>'; g+='<text class="axis-num" x="'+(padL-6)+'" y="'+(y+3)+'" text-anchor="end">'+Math.round(t/1000)+'k</text>'; }
     var y0=Yv(0); g+='<line class="baseline" x1="'+padL+'" y1="'+y0+'" x2="'+(W-padR)+'" y2="'+y0+'"/>';
+    if(typeof state.quarter==="number"&&state.quarter){ var qx=padL+iw*((state.quarter-1)*3/(n-1||1)); g+='<rect x="'+qx+'" y="'+padT+'" width="'+(iw*(2/(n-1||1)))+'" height="'+ih+'" fill="var(--accent)" opacity="0.07" rx="6"/>'; }
     var linea=function(arr,color,ancho){ var d=""; arr.forEach(function(v,i){ d+=(i?" L":"M")+X(i)+" "+Yv(v); });
       return '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="'+ancho+'" stroke-linejoin="round" stroke-linecap="round"/>'; };
     g+=linea(s.ing,"var(--income)",2.5)+linea(s.gas,"var(--expense)",2.5)+linea(res,"var(--accent)",2);
     cpairs.forEach(function(p,i){ var lb=pairLab(p,i);
       g+='<circle cx="'+X(i)+'" cy="'+Yv(res[i])+'" r="9" fill="transparent" style="cursor:pointer" data-tip="<b>'+lb+'</b><br>Ingresos <b>'+eur2(s.ing[i])+'</b><br>Gastos <b>'+eur2(s.gas[i])+'</b><br>Resultado <b>'+eur2(res[i])+'</b>"/>';
-      g+='<text class="axis" x="'+X(i)+'" y="'+(H-22)+'" text-anchor="middle">'+lb+'</text>'; });
-    $("#chartCon").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ingresos, gastos y resultado por mes">'+g+'</svg>'+
-      '<div class="legend" style="margin-top:6px"><span><i class="dot" style="background:var(--income)"></i> Ingresos</span><span><i class="dot" style="background:var(--expense)"></i> Gastos</span><span><i class="dot" style="background:var(--accent)"></i> Resultado</span></div>';
-    wireTips("#chartCon");
+      g+='<text class="axis" x="'+X(i)+'" y="'+(H-10)+'" text-anchor="middle">'+lb+'</text>'; });
+    $(sel).innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ingresos, gastos y resultado por mes">'+g+'</svg>';
+    wireTips(sel);
   }
   function clients(pairs){
     var d=clientTotals(pairs),names=Object.keys(d.by);
@@ -847,7 +876,8 @@
     var rows=visibleItems().sort(function(a,b){return (a.tipo>b.tipo?1:a.tipo<b.tipo?-1:0)||(b.importe-a.importe);});
     var visIds={}; rows.forEach(function(it){visIds[it.id]=1;});
     Object.keys(selected).forEach(function(id){ if(!visIds[id]) delete selected[id]; });
-    $("#movBody").innerHTML=rows.map(function(it){
+    var now=new Date();
+    function rowHtml(it){
       var recu=it.freq==="recurrente",annual=recu?arr12(it):(it.pct>0?arr12(it)/12:it.importe);
       var impCell=it.pct>0?(String(it.pct).replace(".",",")+"% ingresos"):eur2(it.importe);
       var freqTag=recu?('<span class="tag rec">'+perLabel(it.periodicidad)+' · '+(it.desde||"").slice(2)+(it.hasta?" → "+it.hasta.slice(2):"")+'</span>'):('<span class="tag">Puntual · '+(it.mes||"").slice(2)+'</span>');
@@ -860,14 +890,25 @@
         '<td><span class="tag '+(it.tipo==="ingreso"?"ing":"gas")+'">'+(it.tipo==="ingreso"?"Ingreso":"Gasto")+'</span></td>'+
         '<td>'+freqTag+'</td><td class="r">'+impCell+'</td><td class="r"><b>'+eur2(annual)+'</b></td>'+
         '<td class="r"><span class="rowacts"><button class="rowact edit" data-id="'+it.id+'" title="Editar">✎</button><button class="rowact dup" data-id="'+it.id+'" title="Duplicar">⧉</button><button class="rowact del" data-id="'+it.id+'" title="Eliminar">✕</button></span></td></tr>';
-    }).join("")||'<tr><td colspan="8" style="color:var(--ink-3)">Sin movimientos que cumplan el filtro.</td></tr>';
-    if(rows.length){
-      var tImp=0,tAn=0;
-      var now=new Date();
-      rows.forEach(function(it){ tImp+=(it.pct>0?ingresosMes(now.getFullYear(),now.getMonth())*it.pct/100:it.importe);
-        tAn+=(it.freq==="recurrente"?arr12(it):(it.pct>0?arr12(it)/12:it.importe)); });
-      $("#movBody").innerHTML+='<tr style="border-top:2px solid var(--line-strong);cursor:default"><td></td><td><b>Total · '+rows.length+' líneas</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tImp)+'</b></td><td class="r"><b>'+eur2(tAn)+'</b></td><td></td></tr>';
     }
+    function subtot(arr){ var imp=0,an=0;
+      arr.forEach(function(it){ imp+=(it.pct>0?ingresosMes(now.getFullYear(),now.getMonth())*it.pct/100:it.importe);
+        an+=(it.freq==="recurrente"?arr12(it):(it.pct>0?arr12(it)/12:it.importe)); });
+      return {imp:imp,an:an}; }
+    function seccion(titulo,color,arr){
+      if(!arr.length)return "";
+      var st=subtot(arr);
+      return '<tr style="cursor:default"><td colspan="8" style="border-bottom:0;padding:16px 10px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:'+color+'">'+titulo+' · '+arr.length+'</td></tr>'+
+        arr.map(rowHtml).join("")+
+        '<tr style="cursor:default;background:var(--surface-2)"><td></td><td><b>Subtotal '+titulo.toLowerCase()+'</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(st.imp)+'</b></td><td class="r"><b>'+eur2(st.an)+'</b></td><td></td></tr>';
+    }
+    var ings=rows.filter(function(it){return it.tipo==="ingreso";}),gass=rows.filter(function(it){return it.tipo==="gasto";});
+    var html=seccion("Ingresos","var(--accent-ink)",ings)+seccion("Gastos","var(--expense)",gass);
+    if(rows.length&&ings.length&&gass.length){
+      var ti=subtot(ings),tg=subtot(gass);
+      html+='<tr style="border-top:2px solid var(--line-strong);cursor:default"><td></td><td><b>Resultado (ingresos − gastos)</b></td><td></td><td></td><td></td><td class="r"><b style="color:'+(ti.imp-tg.imp>=0?"var(--good-ink)":"var(--crit)")+'">'+eur2(ti.imp-tg.imp)+'</b></td><td class="r"><b style="color:'+(ti.an-tg.an>=0?"var(--good-ink)":"var(--crit)")+'">'+eur2(ti.an-tg.an)+'</b></td><td></td></tr>';
+    }
+    $("#movBody").innerHTML=html||'<tr><td colspan="8" style="color:var(--ink-3)">Sin movimientos que cumplan el filtro.</td></tr>';
     var filtrado=fltQ||fltTipo||fltNat||fltCliente||fltProveedor||fltCat;
     $("#movCount").textContent=rows.length+" líneas · "+periodLabel()+(filtrado?" · filtrado":"");
     $$("#movBody tr[data-id]").forEach(function(tr){
