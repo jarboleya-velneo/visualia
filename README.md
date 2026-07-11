@@ -73,7 +73,7 @@ Otras pestañas de la hoja:
 
 ## Trabajar con la tabla de movimientos
 
-- **Filtros**: ejercicio (segmento de años) + trimestre (Año / T1–T4) + búsqueda de texto + tipo + naturaleza. El trimestre también recalcula los KPIs y el desglose de costes.
+- **Filtros**: ejercicio (segmento de años) + periodo (Año / T1–T4 / **12m**) + búsqueda de texto + tipo + naturaleza. El periodo recalcula KPIs, gráficas, desglose, conceptos, clientes y presupuesto. **12m = vista interanual**: los próximos 12 meses desde hoy manteniendo los ingresos y gastos actuales (cruza ejercicios; el presupuesto mezcla los dos años que toca).
 - **Multiselección**: marca las casillas (o «seleccionar todo») y aparece la barra de acciones: **✎ Editar** (en lote: categoría, cliente, proveedor, naturaleza — solo se aplican los campos que cambies), **⧉ Duplicar** y **✕ Eliminar**.
 
 ## Los KPIs
