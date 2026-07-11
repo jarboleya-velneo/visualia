@@ -1,0 +1,15 @@
+tipo;freq;periodicidad;categoria;concepto;cliente;proveedor;persona;importe;naturaleza;desde;hasta;mes
+ingreso;recurrente;1;Ingresos recurrentes;Cliente Alfa — servicio IA;Alfa;;;1500;;2025-01;;
+ingreso;recurrente;1;Ingresos recurrentes;Cliente Beta — suscripción;Beta;;;1200;;2025-09;;
+ingreso;recurrente;1;Ingresos recurrentes;Cliente Gamma — plataforma;Gamma;;;2500;;2026-03;;
+ingreso;puntual;1;Proyectos puntuales;Proyecto a medida — Delta;Delta;;;4000;;;;2026-05
+gasto;recurrente;1;Nóminas;Nómina Jesús;;;Jesús;3000;indirecto;2025-01;;
+gasto;recurrente;1;Nóminas;Nómina Bea;;;Bea;3000;indirecto;2025-01;;
+gasto;recurrente;1;AWS / Infraestructura;AWS — Cliente Alfa;Alfa;AWS;;350;directo;2025-01;;
+gasto;recurrente;1;AWS / Infraestructura;AWS — Cliente Gamma;Gamma;AWS;;500;directo;2026-03;;
+gasto;recurrente;1;Suscripciones;Claude Max;;Anthropic;;100;indirecto;2025-01;;
+gasto;recurrente;1;Suscripciones;Claude API (uso);;Anthropic;;120;directo;2025-06;;
+gasto;recurrente;1;Suscripciones;Wispr Flow;;Wispr;;15;indirecto;2026-01;;
+gasto;recurrente;1;Suscripciones;WealthReader;;WealthReader;;75;directo;2025-01;;
+gasto;recurrente;3;Servicios externos;Asesoría fiscal;;;;180;indirecto;2025-01;;
+gasto;puntual;1;Servicios externos;Formación equipo;;;;600;indirecto;;;2026-02
