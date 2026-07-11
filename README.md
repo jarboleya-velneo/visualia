@@ -78,6 +78,10 @@ Otras pestañas de la hoja:
 - **Filtros adicionales**: cliente (incluye «— sin cliente —»), proveedor y tipo/categoría, combinables con el resto. La rejilla muestra una fila de **totales** (importe y anual equivalente) de lo filtrado.
 - **Multiselección**: marca las casillas (o «seleccionar todo») y aparece la barra de acciones: **✎ Editar** (en lote: categoría, cliente, proveedor, naturaleza — solo se aplican los campos que cambies), **⧉ Duplicar** y **✕ Eliminar**.
 
+## Categorías comodín en el presupuesto
+
+Si creas una categoría de gasto llamada **«Gastos directos»** o **«Gastos indirectos»** (también vale «Costes …»), en el panel Presupuesto vs. real su ejecución se calcula **por naturaleza**: suma todos los movimientos directos/indirectos del periodo, estén en la categoría que estén (se marca «· por naturaleza» en la fila). Así puedes presupuestar el total por naturaleza además de (o en vez de) por categoría.
+
 ## Los KPIs
 
 - **ARR neto × ViMi** (KPI principal) = (ARR de ingresos − costes recurrentes activos anualizados, **excluyendo nóminas**) ÷ nº de ViMis del maestro de personas. Qué es nómina no depende del nombre: se marca con el campo **«Excluir de ARR neto × ViMi y del reparto por cliente»** en la ficha de la categoría de gasto (Maestros) — nóminas, SSCC y similares. Es la métrica de referencia de la división.

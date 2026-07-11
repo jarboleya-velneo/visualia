@@ -458,8 +458,8 @@
     {key:"conceptosGasto",label:"Conceptos gasto",fields:[["nombre","Nombre",1],["categoria","Categoría por defecto",0,"categoriasGasto"],["naturaleza","Naturaleza (directo / indirecto)",0,"NAT"],["proveedor","Proveedor por defecto",0,"proveedores"],["notas","Notas"]]},
     {key:"categoriasIngreso",label:"Categorías ingreso",fields:[["nombre","Nombre",1],["notas","Notas"]]},
     {key:"categoriasGasto",label:"Categorías gasto",fields:[["nombre","Nombre",1],["personal","Excluir de ARR neto × ViMi y del reparto por cliente (nóminas, SSCC…)",0,"SINO"],["notas","Notas"]]}];
-  var eur=function(n){return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);};
-  var eur2=function(n){return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(n||0);};
+  var eur=function(n){return new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);}; // de-DE: separador de miles siempre, mismo formato visual que es-ES
+  var eur2=function(n){return new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);};
   var pctf=function(n){return (n>=0?"+":"")+(Math.round(n*10)/10).toLocaleString("es-ES")+"%";};
   var $=function(s){return document.querySelector(s);};
   var $$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s));};
@@ -768,12 +768,22 @@
     $("#chartBud").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Presupuesto vs real por mes">'+g+'</svg>';
     wireTips("#chartBud");
   }
+  // Categorías "comodín": si una categoría de gasto se llama Gastos/Costes directos
+  // o indirectos, su real se calcula por NATURALEZA (todos los movimientos con esa
+  // naturaleza, estén en la categoría que estén), no por coincidencia de nombre.
+  function natCatEspecial(nombre){ var n=(nombre||"").toLowerCase().trim();
+    if(/^(gastos?|costes?)\s+directos?$/.test(n))return "dir";
+    if(/^(gastos?|costes?)\s+indirectos?$/.test(n))return "ind";
+    return ""; }
   function budget(pairs){
     chartBud(pairs);
-    var real=catTotals(pairs),inc=incTotals(pairs);
+    var real=catTotals(pairs),inc=incTotals(pairs),tot=totalsPairs(pairs);
     var html="",hay=false;
     [["Ingresos · objetivo","categoriasIngreso",inc,true],["Gastos · límite","categoriasGasto",real,false]].forEach(function(sec){
-      var rows=mNames(sec[1]).map(function(k){ return {k:k,real:sec[2][k]||0,bud:budForPairs(k,pairs),good:sec[3]}; })
+      var rows=mNames(sec[1]).map(function(k){
+          var r=sec[2][k]||0,especial=sec[3]?"":natCatEspecial(k);
+          if(especial==="dir")r=tot.dir; else if(especial==="ind")r=tot.ind;
+          return {k:k+(especial?" · por naturaleza":""),real:r,bud:budForPairs(k,pairs),good:sec[3]}; })
         .filter(function(r){return r.real||r.bud;});
       if(!rows.length)return; hay=true;
       html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin:12px 0 10px">'+sec[0]+'</div>';
