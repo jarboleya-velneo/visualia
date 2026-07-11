@@ -610,8 +610,12 @@
     lineas=lineas.concat(abiertas.length?abiertas.map(function(t){return "  • "+t.titulo+(t.persona?" ("+t.persona+")":"");}):["  (nada pendiente)"]);
     if(state.fin&&state.fin.items&&state.fin.items.length&&c){
       var Y=+mes.slice(0,4),ing=0,dir=0;
+      var natDe=function(it){ if(it.tipo!=="gasto")return "";
+        var l=(state.fin.masters&&state.fin.masters.conceptosGasto)||[],n=(it.concepto||"").toLowerCase();
+        for(var i=0;i<l.length;i++) if((l[i].nombre||"").toLowerCase()===n&&l[i].naturaleza) return l[i].naturaleza;
+        return it.naturaleza||"indirecto"; };
       state.fin.items.forEach(function(it){ for(var m=0;m<12;m++){ var v=ocurre(it,Y,m); if(!v)continue;
-        if(it.cliente===c){ if(it.tipo==="ingreso")ing+=v; else if(it.naturaleza==="directo")dir+=v; } } });
+        if(it.cliente===c){ if(it.tipo==="ingreso")ing+=v; else if(natDe(it)==="directo")dir+=v; } } });
       lineas.push("","— Resumen económico "+Y+" (interno, retirar si no procede) —","  Facturación: "+eur(ing)+" · Costes directos: "+eur(dir));
     }
     lineas.push("","Un saludo,","Equipo Visual Inteligencia");

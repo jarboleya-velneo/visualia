@@ -339,6 +339,7 @@
         <button type="button" data-v="directo" aria-pressed="false">Directo (por cliente)</button>
         <button type="button" data-v="indirecto" aria-pressed="true">Indirecto (estructura)</button>
       </div>
+      <div class="help hidden" id="natLock">🔒 Definida por la ficha del concepto (Maestros): se aplica a todos sus movimientos y los indirectos se reparten automáticamente entre clientes por facturación. Para cambiarla, edita la ficha.</div>
     </div>
     <div class="modal-actions">
       <button class="btn ghost" id="mCancel">Cancelar</button>
@@ -434,7 +435,7 @@
     {key:"proveedores",label:"Proveedores",fields:[["nombre","Nombre",1],["nif","NIF"],["email","Email"],["telefono","Teléfono"],["notas","Notas"]]},
     {key:"personas",label:"Personas / ViMis",fields:[["nombre","Nombre",1],["rol","Rol"],["email","Email"],["notas","Notas"]]},
     {key:"conceptosIngreso",label:"Conceptos ingreso",fields:[["nombre","Nombre",1],["categoria","Categoría por defecto",0,"categoriasIngreso"],["notas","Notas"]]},
-    {key:"conceptosGasto",label:"Conceptos gasto",fields:[["nombre","Nombre",1],["categoria","Categoría por defecto",0,"categoriasGasto"],["naturaleza","Naturaleza por defecto",0,"NAT"],["proveedor","Proveedor por defecto",0,"proveedores"],["notas","Notas"]]},
+    {key:"conceptosGasto",label:"Conceptos gasto",fields:[["nombre","Nombre",1],["categoria","Categoría por defecto",0,"categoriasGasto"],["naturaleza","Naturaleza (directo / indirecto)",0,"NAT"],["proveedor","Proveedor por defecto",0,"proveedores"],["notas","Notas"]]},
     {key:"categoriasIngreso",label:"Categorías ingreso",fields:[["nombre","Nombre",1],["notas","Notas"]]},
     {key:"categoriasGasto",label:"Categorías gasto",fields:[["nombre","Nombre",1],["notas","Notas"]]}];
   var eur=function(n){return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);};
@@ -511,6 +512,13 @@
   function mNames(key){ return state.masters[key].map(function(x){return x.nombre;}); }
   function mFind(key,nombre){ var v=(nombre||"").trim().toLowerCase(),l=state.masters[key];
     for(var i=0;i<l.length;i++) if(l[i].nombre.toLowerCase()===v) return l[i]; return null; }
+  // Naturaleza efectiva de un gasto: la ficha del concepto (maestro) manda;
+  // el valor guardado en el movimiento es solo el respaldo si la ficha no la define.
+  function natDe(it){
+    if(it.tipo!=="gasto")return "";
+    var rec=mFind("conceptosGasto",it.concepto);
+    return (rec&&rec.naturaleza)||it.naturaleza||"indirecto";
+  }
   function harvestMasters(s){
     s=s||state;
     s.items.forEach(function(it){
@@ -587,7 +595,7 @@
   function periodLabel(){ var q=state.quarter||0; return q?("T"+q+" "+state.year):("Ejercicio "+state.year); }
   function seriesFor(Y){ var ing=Array(12).fill(0),gas=Array(12).fill(0),dir=Array(12).fill(0),ind=Array(12).fill(0);
     state.items.forEach(function(it){ for(var m=0;m<12;m++){ var a=inRange(it,Y,m); if(!a)continue;
-      if(it.tipo==="ingreso")ing[m]+=a; else{gas[m]+=a; if(it.naturaleza==="directo")dir[m]+=a; else ind[m]+=a;} } });
+      if(it.tipo==="ingreso")ing[m]+=a; else{gas[m]+=a; if(natDe(it)==="directo")dir[m]+=a; else ind[m]+=a;} } });
     return {ing:ing,gas:gas,dir:dir,ind:ind}; }
   function sumSel(arr,months){ var t=0; months.forEach(function(m){t+=arr[m];}); return t; }
   function arr12(it){ return it.importe*12/(it.periodicidad||1); }
@@ -602,7 +610,7 @@
     var by={},ind=0,ingTot=0;
     state.items.forEach(function(it){ var s=0; months.forEach(function(m){s+=inRange(it,Y,m);}); if(!s)return;
       if(it.tipo==="ingreso"){ var k=it.cliente||"— sin cliente"; by[k]=by[k]||{ing:0,dir:0}; by[k].ing+=s; ingTot+=s; }
-      else if(it.naturaleza==="directo"){ var k2=it.cliente||"— sin cliente"; by[k2]=by[k2]||{ing:0,dir:0}; by[k2].dir+=s; }
+      else if(natDe(it)==="directo"){ var k2=it.cliente||"— sin cliente"; by[k2]=by[k2]||{ing:0,dir:0}; by[k2].dir+=s; }
       else ind+=s; });
     return {by:by,ind:ind,ingTot:ingTot};
   }
@@ -720,7 +728,7 @@
       for(var i=0;i<months.length&&!act;i++) act=inRange(it,Y,months[i])>0||activeAt(it,Y,months[i]);
       if(!act) return false;
       if(fltTipo&&it.tipo!==fltTipo) return false;
-      if(fltNat&&(it.tipo!=="gasto"||it.naturaleza!==fltNat)) return false;
+      if(fltNat&&(it.tipo!=="gasto"||natDe(it)!==fltNat)) return false;
       if(q){ var hay=[it.concepto,it.cliente,it.proveedor,it.persona,it.categoria].join(" ").toLowerCase(); if(hay.indexOf(q)<0)return false; }
       return true;
     });
@@ -732,7 +740,7 @@
     $("#movBody").innerHTML=rows.map(function(it){
       var recu=it.freq==="recurrente",annual=recu?arr12(it):it.importe;
       var freqTag=recu?('<span class="tag rec">'+perLabel(it.periodicidad)+' · '+(it.desde||"").slice(2)+(it.hasta?" → "+it.hasta.slice(2):"")+'</span>'):('<span class="tag">Puntual · '+(it.mes||"").slice(2)+'</span>');
-      var natTag=it.tipo==="gasto"?(it.naturaleza==="directo"?'<span class="tag dir">Directo</span>':'<span class="tag ind">Indirecto</span>'):'';
+      var natTag=it.tipo==="gasto"?(natDe(it)==="directo"?'<span class="tag dir">Directo</span>':'<span class="tag ind">Indirecto</span>'):'';
       var who=[it.cliente,it.proveedor,it.persona].filter(Boolean).join(" · ");
       return '<tr data-id="'+it.id+'"'+(selected[it.id]?' class="sel"':'')+'>'+
         '<td class="chk"><input type="checkbox" class="rowchk" data-id="'+it.id+'"'+(selected[it.id]?" checked":"")+'></td>'+
@@ -800,8 +808,13 @@
     $("#fldPer").classList.toggle("hidden",!recu&&editingId!==null); }
   function syncTipoUI(sel){ $("#fldNat").classList.toggle("hidden",form.tipo!=="gasto");
     $("#fldGasto").classList.toggle("hidden",form.tipo!=="gasto"); fillCats(sel); fillDatalists(); }
-  function applyConceptoDefaults(){ // al elegir un concepto del maestro, rellena sus valores por defecto
+  function lockNat(locked){
+    $$("#tgNat button").forEach(function(b){ b.disabled=locked; b.style.opacity=locked?".55":""; });
+    $("#natLock").classList.toggle("hidden",!locked);
+  }
+  function applyConceptoDefaults(){ // al elegir un concepto del maestro, aplica su ficha
     var rec=mFind(form.tipo==="ingreso"?"conceptosIngreso":"conceptosGasto",$("#fConcepto").value);
+    if(form.tipo==="gasto") lockNat(!!(rec&&rec.naturaleza));
     if(!rec)return;
     if(rec.categoria) fillCats(rec.categoria);
     if(form.tipo==="gasto"){
@@ -812,13 +825,14 @@
 
   function openCreate(){ editingId=null; form={tipo:"ingreso",freq:"recurrente",naturaleza:"indirecto"};
     $("#mTitle").textContent="Registrar movimiento"; $("#mDelete").classList.add("hidden");
-    resetTg("tgTipo","ingreso"); resetTg("tgFreq","recurrente"); resetTg("tgNat","indirecto");
+    resetTg("tgTipo","ingreso"); resetTg("tgFreq","recurrente"); resetTg("tgNat","indirecto"); lockNat(false);
     $("#fImporte").value=""; $("#fConcepto").value=""; $("#fCliente").value=""; $("#fProveedor").value=""; $("#fPersona").value="";
     $("#fHasta").value=""; $("#fRepeat").value="1"; fillPer(1);
     $("#fMes").value=state.year+"-01"; syncTipoUI(); syncFreqUI(); $("#scrim").classList.add("open"); setTimeout(function(){$("#fImporte").focus();},60); }
   function openEdit(id){ var it=find(id); if(!it)return; editingId=id; form={tipo:it.tipo,freq:it.freq,naturaleza:it.naturaleza||"indirecto"};
     $("#mTitle").textContent="Editar movimiento"; $("#mDelete").classList.remove("hidden");
-    resetTg("tgTipo",it.tipo); resetTg("tgFreq",it.freq); resetTg("tgNat",it.naturaleza||"indirecto");
+    resetTg("tgTipo",it.tipo); resetTg("tgFreq",it.freq); resetTg("tgNat",natDe(it)||"indirecto");
+    lockNat(it.tipo==="gasto"&&!!((mFind("conceptosGasto",it.concepto)||{}).naturaleza));
     $("#fImporte").value=it.importe; $("#fConcepto").value=it.concepto; $("#fCliente").value=it.cliente||"";
     $("#fProveedor").value=it.proveedor||""; $("#fPersona").value=it.persona||""; fillPer(it.periodicidad||1);
     $("#fMes").value=it.freq==="recurrente"?(it.desde||state.year+"-01"):(it.mes||state.year+"-01"); $("#fHasta").value=it.hasta||"";
@@ -1011,7 +1025,7 @@
   // ---- CSV ----
   var CSV_HEAD=["tipo","freq","periodicidad","categoria","concepto","cliente","proveedor","persona","importe","naturaleza","desde","hasta","mes"];
   function toCSV(){ var lines=[CSV_HEAD.join(";")];
-    state.items.forEach(function(it){ lines.push([it.tipo,it.freq,it.periodicidad||1,it.categoria,'"'+(it.concepto||"").replace(/"/g,'""')+'"',it.cliente||"",it.proveedor||"",it.persona||"",String(it.importe).replace(".",","),it.naturaleza||"",it.desde||"",it.hasta||"",it.mes||""].join(";")); }); return lines.join("\n"); }
+    state.items.forEach(function(it){ lines.push([it.tipo,it.freq,it.periodicidad||1,it.categoria,'"'+(it.concepto||"").replace(/"/g,'""')+'"',it.cliente||"",it.proveedor||"",it.persona||"",String(it.importe).replace(".",","),(it.tipo==="gasto"?natDe(it):""),it.desde||"",it.hasta||"",it.mes||""].join(";")); }); return lines.join("\n"); }
   function downloadCSV(){ var blob=new Blob([toCSV()],{type:"text/csv;charset=utf-8;"}),url=URL.createObjectURL(blob),a=document.createElement("a"); a.href=url; a.download="vimi_movimientos.csv"; a.click(); URL.revokeObjectURL(url); }
   function importCSV(text){ var rows=text.split(/\r?\n/).filter(function(l){return l.trim();});
     var head=(rows.shift()||"").split(";").map(function(h){return h.trim().toLowerCase();}),added=0;
