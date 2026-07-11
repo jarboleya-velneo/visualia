@@ -78,7 +78,8 @@ Otras pestañas de la hoja:
 
 ## Los KPIs
 
-- **ARR neto × ViMi** (KPI principal) = (ARR de ingresos − costes recurrentes activos anualizados) ÷ nº de ViMis del maestro de personas. Es la métrica de referencia de la división.
+- **ARR neto × ViMi** (KPI principal) = (ARR de ingresos − costes recurrentes activos anualizados, **excluyendo nóminas**) ÷ nº de ViMis del maestro de personas. Qué es nómina no depende del nombre: se marca con el campo **«Coste de personal»** en la ficha de la categoría de gasto (Maestros). Es la métrica de referencia de la división.
+- **Gastos por concepto**: tabla + gráfico de barras con el coste de cada cosa (Velneo Cloud, APIs por cliente…) en mensual equivalente y total del periodo, con proveedor y naturaleza.
 - **ARR** = ingresos recurrentes activos anualizados según su periodicidad (`importe × 12 / periodicidad`).
 - **Resultado neto** = Ingresos − Costes directos − Costes indirectos, con **margen %**.
 - **Ingresos**, **Costes directos**, **Costes indirectos**, todos con variación interanual.

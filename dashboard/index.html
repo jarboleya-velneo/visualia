@@ -244,6 +244,19 @@
   </div>
 
   <div class="card panel" style="margin-bottom:16px">
+    <div class="phead"><div><h2>Gastos por concepto</h2><p class="hint" id="conHint">Cuánto cuesta cada cosa · mensual equivalente y total del periodo</p></div></div>
+    <div class="grid2" style="margin-bottom:0">
+      <div class="twrap">
+        <table id="conTable">
+          <thead><tr><th>Concepto</th><th>Proveedor</th><th></th><th class="r">Mes equiv.</th><th class="r">Periodo</th></tr></thead>
+          <tbody id="conBody"></tbody>
+        </table>
+      </div>
+      <div id="chartCon"></div>
+    </div>
+  </div>
+
+  <div class="card panel" style="margin-bottom:16px">
     <div class="phead"><div><h2>Resultado por cliente</h2><p class="hint" id="cliHint">Ingresos − gastos directos − indirectos repartidos por facturación</p></div></div>
     <div class="twrap">
       <table id="cliTable">
@@ -437,7 +450,7 @@
     {key:"conceptosIngreso",label:"Conceptos ingreso",fields:[["nombre","Nombre",1],["categoria","Categoría por defecto",0,"categoriasIngreso"],["notas","Notas"]]},
     {key:"conceptosGasto",label:"Conceptos gasto",fields:[["nombre","Nombre",1],["categoria","Categoría por defecto",0,"categoriasGasto"],["naturaleza","Naturaleza (directo / indirecto)",0,"NAT"],["proveedor","Proveedor por defecto",0,"proveedores"],["notas","Notas"]]},
     {key:"categoriasIngreso",label:"Categorías ingreso",fields:[["nombre","Nombre",1],["notas","Notas"]]},
-    {key:"categoriasGasto",label:"Categorías gasto",fields:[["nombre","Nombre",1],["notas","Notas"]]}];
+    {key:"categoriasGasto",label:"Categorías gasto",fields:[["nombre","Nombre",1],["personal","Coste de personal (nóminas — fuera del ARR neto × ViMi)",0,"SINO"],["notas","Notas"]]}];
   var eur=function(n){return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);};
   var eur2=function(n){return new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(n||0);};
   var pctf=function(n){return (n>=0?"+":"")+(Math.round(n*10)/10).toLocaleString("es-ES")+"%";};
@@ -457,7 +470,7 @@
       conceptosIngreso:[{nombre:"Cuota servicio IA",categoria:"Ingresos recurrentes"},{nombre:"Suscripción plataforma",categoria:"Ingresos recurrentes"},{nombre:"Proyecto a medida",categoria:"Proyectos puntuales"}],
       conceptosGasto:[{nombre:"Nómina",categoria:"Nóminas",naturaleza:"indirecto"},{nombre:"AWS hosting",categoria:"AWS / Infraestructura",naturaleza:"directo",proveedor:"AWS"},{nombre:"Claude Max",categoria:"Suscripciones",naturaleza:"indirecto",proveedor:"Anthropic"},{nombre:"Claude API (uso)",categoria:"Suscripciones",naturaleza:"directo",proveedor:"Anthropic"},{nombre:"Wispr Flow",categoria:"Suscripciones",naturaleza:"indirecto",proveedor:"Wispr"},{nombre:"WealthReader",categoria:"Suscripciones",naturaleza:"directo",proveedor:"WealthReader"},{nombre:"Formación",categoria:"Servicios externos",naturaleza:"indirecto"}],
       categoriasIngreso:mk(["Ingresos recurrentes","Proyectos puntuales","Otros ingresos"]),
-      categoriasGasto:mk(["Nóminas","AWS / Infraestructura","Suscripciones","Servicios externos","Otros gastos"])
+      categoriasGasto:[{nombre:"Nóminas",personal:"si"}].concat(mk(["AWS / Infraestructura","Suscripciones","Servicios externos","Otros gastos"]))
     };
   }
   function seed(){
@@ -505,6 +518,7 @@
     MASTER_DEFS.forEach(function(def){ var k=def.key, list=(m&&Array.isArray(m[k])&&m[k].length)?m[k]:d[k];
       // acepta el formato antiguo (lista de textos) y lo convierte en fichas
       out[k]=list.map(function(v){ return typeof v==="string"?{nombre:v}:(v&&v.nombre?v:null); }).filter(Boolean);
+      if(k==="categoriasGasto")out[k].forEach(function(c){ if(c.personal==null&&/n[oó]mina/i.test(c.nombre))c.personal="si"; });
       sortM(out[k]); });
     return out;
   }
@@ -601,9 +615,12 @@
   function arr12(it){ return it.importe*12/(it.periodicidad||1); }
   function arrKpi(Y,months){ var last=months[months.length-1],t=0;
     state.items.forEach(function(it){ if(it.tipo==="ingreso"&&activeAt(it,Y,last)) t+=arr12(it); }); return t; }
-  function arrNet(Y,months){ // ARR de ingresos menos costes recurrentes activos, todo anualizado
+  function esPersonal(cat){ var rec=mFind("categoriasGasto",cat); return !!(rec&&rec.personal==="si"); }
+  function arrNet(Y,months){ // ARR de ingresos menos costes recurrentes activos (sin nóminas/personal), anualizado
     var last=months[months.length-1],t=0;
-    state.items.forEach(function(it){ if(!activeAt(it,Y,last))return; t+=(it.tipo==="ingreso"?1:-1)*arr12(it); }); return t; }
+    state.items.forEach(function(it){ if(!activeAt(it,Y,last))return;
+      if(it.tipo==="gasto"&&esPersonal(it.categoria))return;
+      t+=(it.tipo==="ingreso"?1:-1)*arr12(it); }); return t; }
   function catTotals(Y,months){ var t={}; state.items.forEach(function(it){ if(it.tipo!=="gasto")return; var s=0; months.forEach(function(m){s+=inRange(it,Y,m);}); if(s)t[it.categoria]=(t[it.categoria]||0)+s; }); return t; }
   function incTotals(Y,months){ var t={}; state.items.forEach(function(it){ if(it.tipo!=="ingreso")return; var s=0; months.forEach(function(m){s+=inRange(it,Y,m);}); if(s)t[it.categoria]=(t[it.categoria]||0)+s; }); return t; }
   function clientTotals(Y,months){
@@ -627,13 +644,13 @@
     $("#cliHint").textContent="Ingresos − gastos directos − indirectos repartidos por facturación · "+PL;
     $("#budHint").textContent="Ejecución por categoría · "+PL+(state.quarter?" (anuales prorrateados)":"");
     $("#kpis").innerHTML=
-      kpi("hero","ARR neto × ViMi",eur(ANV),"ARR − costes recurrentes, entre "+nV+" ViMi"+(nV===1?"":"s"),delta(ANV,ANVp),"var(--brass)")+
+      kpi("hero","ARR neto × ViMi",eur(ANV),"ARR − costes recurrentes sin nóminas, entre "+nV+" ViMi"+(nV===1?"":"s"),delta(ANV,ANVp),"var(--brass)")+
       kpi("hero","Resultado neto",eur(net),"Margen "+Math.round(margin)+"% · "+PL,delta(net,netP),"var(--accent)")+
       kpi("","ARR",eur(A),"Recurrente anualizado",delta(A,Ap))+
       kpi("","Ingresos",eur(ingT),"Facturado · "+PL,delta(ingT,ingP))+
       kpi("","Costes directos",eur(dirT),"Ligados a cliente",delta(dirT,dirP,true))+
       kpi("","Costes indirectos",eur(indT),"Estructura",delta(indT,indP,true));
-    chartIVG(s); donut(catTotals(Y,months)); chartNet(s); budget(Y); clients(Y,months); movTable();
+    chartIVG(s); donut(catTotals(Y,months)); chartNet(s); budget(Y); conceptos(Y,months); clients(Y,months); movTable();
   }
   function kpi(cls,lab,val,sub,d,accent){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div><div class="sub">'+d+' '+sub+'</div></div>'; }
   function delta(cur,prev,inv){ if(!prev)return '<span class="delta flat">nuevo</span>'; var ch=(cur-prev)/Math.abs(prev)*100,up=ch>=0,good=inv?!up:up,cls=Math.abs(ch)<0.5?"flat":(good?"up":"down"),ar=Math.abs(ch)<0.5?"→":(up?"▲":"▼"); return '<span class="delta '+cls+'">'+ar+' '+pctf(ch)+'</span>'; }
@@ -705,6 +722,40 @@
     }).join("")||'<p class="hint">Define presupuestos (✎) para ver la ejecución.</p>';
   }
 
+  function conceptTotals(Y,months){ // gasto por concepto en el periodo (+ mensual equivalente)
+    var by={};
+    state.items.forEach(function(it){ if(it.tipo!=="gasto")return;
+      var t=0; months.forEach(function(m){ t+=inRange(it,Y,m); }); if(!t)return;
+      var k=it.concepto||"(sin concepto)";
+      var o=by[k]=by[k]||{total:0,mes:0,proveedor:it.proveedor||"",nat:natDe(it),cliente:it.cliente||""};
+      o.total+=t;
+      o.mes+=(it.freq==="recurrente")?it.importe/(it.periodicidad||1):t/months.length;
+      if(!o.proveedor&&it.proveedor)o.proveedor=it.proveedor;
+      if(o.cliente!==it.cliente)o.cliente="";
+    });
+    return by;
+  }
+  function conceptos(Y,months){
+    var by=conceptTotals(Y,months),keys=Object.keys(by).sort(function(a,b){return by[b].total-by[a].total;});
+    if(!keys.length){ $("#conBody").innerHTML='<tr><td colspan="5" style="color:var(--ink-3)">Sin gastos en el periodo.</td></tr>'; $("#chartCon").innerHTML=""; return; }
+    $("#conHint").textContent="Cuánto cuesta cada cosa · mensual equivalente y total · "+periodLabel();
+    var tot=0; keys.forEach(function(k){tot+=by[k].total;});
+    $("#conBody").innerHTML=keys.map(function(k){ var o=by[k];
+      var natTag=o.nat==="directo"?'<span class="tag dir">Directo'+(o.cliente?" · "+esc(o.cliente):"")+'</span>':'<span class="tag ind">Indirecto</span>';
+      return '<tr><td><b>'+esc(k)+'</b></td><td>'+esc(o.proveedor||"—")+'</td><td>'+natTag+'</td><td class="r">'+eur2(o.mes)+'</td><td class="r"><b>'+eur2(o.total)+'</b></td></tr>';
+    }).join("")+'<tr style="border-top:2px solid var(--line-strong)"><td><b>Total</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tot)+'</b></td></tr>';
+    // barras horizontales (top 10)
+    var top=keys.slice(0,10),W=460,rowH=26,padL=4,padR=60,H=top.length*rowH+6;
+    var max=Math.max.apply(null,top.map(function(k){return by[k].total;}));
+    var g="";
+    top.forEach(function(k,i){ var o=by[k],w=Math.max(2,(W-padL-padR)*o.total/max),y=i*rowH+4;
+      g+='<rect x="'+padL+'" y="'+y+'" width="'+w+'" height="16" rx="4" fill="'+(o.nat==="directo"?"var(--s4)":"var(--s1)")+'" data-tip="<b>'+esc(k)+'</b><br><b>'+eur2(o.total)+'</b> en el periodo · '+eur2(o.mes)+'/mes"/>';
+      g+='<text x="'+(padL+6)+'" y="'+(y+12)+'" style="font-size:10.5px;fill:#fff;font-weight:650">'+esc(k.length>34?k.slice(0,33)+"…":k)+'</text>';
+      g+='<text class="axis-num" x="'+(padL+w+6)+'" y="'+(y+12)+'">'+eur(o.total)+'</text>'; });
+    $("#chartCon").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Gastos por concepto">'+g+'</svg>'+
+      '<div class="legend" style="margin-top:8px"><span><i class="dot" style="background:var(--s4)"></i> Directo</span><span><i class="dot" style="background:var(--s1)"></i> Indirecto</span></div>';
+    wireTips("#chartCon");
+  }
   function clients(Y,months){
     var d=clientTotals(Y,months),names=Object.keys(d.by);
     names.sort(function(a,b){return d.by[b].ing-d.by[a].ing;});
@@ -973,7 +1024,9 @@
   function masFieldHtml(def,f,rec){
     var k=f[0],label=f[1],req=f[2],src=f[3],val=rec&&rec[k]||"";
     var inner;
-    if(src==="NAT"){
+    if(src==="SINO"){
+      inner='<select id="mf_'+k+'"><option value="">No</option><option value="si"'+(val==="si"?" selected":"")+'>Sí</option></select>';
+    } else if(src==="NAT"){
       inner='<select id="mf_'+k+'"><option value="">—</option><option value="directo"'+(val==="directo"?" selected":"")+'>Directo</option><option value="indirecto"'+(val==="indirecto"?" selected":"")+'>Indirecto</option></select>';
     } else if(src){
       inner='<select id="mf_'+k+'"><option value="">—</option>'+mNames(src).map(function(n){return '<option'+(n===val?" selected":"")+'>'+esc(n)+'</option>';}).join("")+'</select>';

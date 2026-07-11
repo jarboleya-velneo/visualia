@@ -22,6 +22,14 @@
  * conserva los datos y añade las columnas/pestañas nuevas al escribir.
  */
 
+// ID de la hoja de calculo. Vacio = hoja activa (script vinculado desde
+// Extensiones > Apps Script). Con ID, el script puede ser un proyecto standalone.
+var SHEET_ID = '';
+
+function ss() {
+  return SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
+}
+
 var SHEET_MOV = 'Movimientos';
 var SHEET_PRE = 'Presupuesto';
 var SHEET_MAS = 'Maestros';
@@ -36,18 +44,18 @@ var PRE_HEADERS = ['ejercicio','categoria','importe_anual','m01','m02','m03','m0
 var MAS_HEADERS = ['tipo','nombre','nif','email','telefono','rol','categoria','naturaleza','proveedor','notas'];
 
 function setup() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var mov = ss.getSheetByName(SHEET_MOV) || ss.insertSheet(SHEET_MOV);
+  var s = ss();
+  var mov = s.getSheetByName(SHEET_MOV) || s.insertSheet(SHEET_MOV);
   if (mov.getLastRow() === 0) mov.appendRow(HEADERS);
-  var pre = ss.getSheetByName(SHEET_PRE) || ss.insertSheet(SHEET_PRE);
+  var pre = s.getSheetByName(SHEET_PRE) || s.insertSheet(SHEET_PRE);
   if (pre.getLastRow() === 0) pre.appendRow(PRE_HEADERS);
-  var mas = ss.getSheetByName(SHEET_MAS) || ss.insertSheet(SHEET_MAS);
+  var mas = s.getSheetByName(SHEET_MAS) || s.insertSheet(SHEET_MAS);
   if (mas.getLastRow() === 0) mas.appendRow(MAS_HEADERS);
-  var can = ss.getSheetByName(SHEET_CAN) || ss.insertSheet(SHEET_CAN);
+  var can = s.getSheetByName(SHEET_CAN) || s.insertSheet(SHEET_CAN);
   if (can.getLastRow() === 0) can.appendRow(CAN_HEADERS);
-  var msg = ss.getSheetByName(SHEET_MSG) || ss.insertSheet(SHEET_MSG);
+  var msg = s.getSheetByName(SHEET_MSG) || s.insertSheet(SHEET_MSG);
   if (msg.getLastRow() === 0) msg.appendRow(MSG_HEADERS);
-  var tar = ss.getSheetByName(SHEET_TAR) || ss.insertSheet(SHEET_TAR);
+  var tar = s.getSheetByName(SHEET_TAR) || s.insertSheet(SHEET_TAR);
   if (tar.getLastRow() === 0) tar.appendRow(TAR_HEADERS);
 }
 
@@ -86,8 +94,8 @@ function doPost(e) {
 }
 
 function sheet(name) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  return ss.getSheetByName(name) || ss.insertSheet(name);
+  var s = ss();
+  return s.getSheetByName(name) || s.insertSheet(name);
 }
 
 // Si Sheets convirtió un mes "2026-03" en fecha, lo devolvemos a texto YYYY-MM
