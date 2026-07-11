@@ -57,6 +57,7 @@ Cada fila es un ingreso o gasto. Columnas (iguales en la hoja *Movimientos* y en
 | `proveedor` | Del maestro de proveedores (opcional, gastos) |
 | `persona` | Del maestro de personas/ViMis (opcional, gastos: nóminas…) |
 | `importe` | Recurrente: por periodo · Puntual: total |
+| `pct` | Gasto como **% de los ingresos del mes** (p. ej. SSCC 11%): se recalcula solo cada mes; `importe` va a 0 |
 | `naturaleza` | `directo` · `indirecto` (solo gastos) |
 | `desde` / `hasta` | Recurrente: rango de meses `YYYY-MM` (`hasta` vacío = indefinido) |
 | `mes` | Puntual: mes del apunte `YYYY-MM` |
@@ -79,7 +80,7 @@ Otras pestañas de la hoja:
 
 ## Los KPIs
 
-- **ARR neto × ViMi** (KPI principal) = (ARR de ingresos − costes recurrentes activos anualizados, **excluyendo nóminas**) ÷ nº de ViMis del maestro de personas. Qué es nómina no depende del nombre: se marca con el campo **«Coste de personal»** en la ficha de la categoría de gasto (Maestros). Es la métrica de referencia de la división.
+- **ARR neto × ViMi** (KPI principal) = (ARR de ingresos − costes recurrentes activos anualizados, **excluyendo nóminas**) ÷ nº de ViMis del maestro de personas. Qué es nómina no depende del nombre: se marca con el campo **«Excluir de ARR neto × ViMi y del reparto por cliente»** en la ficha de la categoría de gasto (Maestros) — nóminas, SSCC y similares. Es la métrica de referencia de la división.
 - **Gastos por concepto**: tabla + gráfico de barras con el coste de cada cosa (Velneo Cloud, APIs por cliente…) en mensual equivalente y total del periodo, con proveedor y naturaleza.
 - **ARR** = ingresos recurrentes activos anualizados según su periodicidad (`importe × 12 / periodicidad`).
 - **Resultado neto** = Ingresos − Costes directos − Costes indirectos, con **margen %**.
