@@ -801,25 +801,34 @@
     state.items.forEach(function(it){ if(it.tipo!=="gasto")return;
       var t=sumPairs(it,pairs); if(!t)return;
       var k=it.concepto||"(sin concepto)";
-      var o=by[k]=by[k]||{total:0,mes:0,proveedor:it.proveedor||"",nat:natDe(it),cliente:it.cliente||""};
-      o.total+=t;
-      o.mes+=(it.pct>0)?t/pairs.length:((it.freq==="recurrente")?it.importe/(it.periodicidad||1):t/pairs.length);
+      var o=by[k]=by[k]||{total:0,mes:0,proveedor:it.proveedor||"",nat:natDe(it),cliente:it.cliente||"",det:{}};
+      var mes=(it.pct>0)?t/pairs.length:((it.freq==="recurrente")?it.importe/(it.periodicidad||1):t/pairs.length);
+      o.total+=t; o.mes+=mes;
+      var dk=it.cliente||"— sin cliente";
+      var d=o.det[dk]=o.det[dk]||{total:0,mes:0}; d.total+=t; d.mes+=mes;
       if(!o.proveedor&&it.proveedor)o.proveedor=it.proveedor;
       if(o.cliente!==it.cliente)o.cliente="";
     });
     return by;
   }
+  var conAbiertos={};
   function conceptos(pairs){
     var by=conceptTotals(pairs),keys=Object.keys(by).sort(function(a,b){return by[b].total-by[a].total;});
-    $("#conHint").textContent="Cuánto cuesta cada cosa · mensual equivalente, total y peso · "+periodLabel();
-    if(!keys.length){ $("#conBody").innerHTML='<tr><td colspan="6" style="color:var(--ink-3)">Sin gastos en el periodo.</td></tr>'; }
-    else {
-      var tot=0; keys.forEach(function(k){tot+=by[k].total;});
-      $("#conBody").innerHTML=keys.map(function(k){ var o=by[k],p=tot>0?o.total/tot*100:0;
-        var natTag=o.nat==="directo"?'<span class="tag dir">Directo'+(o.cliente?" · "+esc(o.cliente):"")+'</span>':'<span class="tag ind">Indirecto</span>';
-        return '<tr><td><b>'+esc(k)+'</b></td><td>'+esc(o.proveedor||"—")+'</td><td>'+natTag+'</td><td class="r">'+eur2(o.mes)+'</td><td class="r"><b>'+eur2(o.total)+'</b></td><td class="r">'+(Math.round(p*10)/10).toLocaleString("es-ES")+'%</td></tr>';
-      }).join("")+'<tr style="border-top:2px solid var(--line-strong)"><td><b>Total</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tot)+'</b></td><td class="r"><b>100%</b></td></tr>';
-    }
+    $("#conHint").textContent="Cuánto cuesta cada cosa · pulsa un concepto para ver su detalle por cliente · "+periodLabel();
+    if(!keys.length){ $("#conBody").innerHTML='<tr><td colspan="6" style="color:var(--ink-3)">Sin gastos en el periodo.</td></tr>'; return; }
+    var tot=0; keys.forEach(function(k){tot+=by[k].total;});
+    $("#conBody").innerHTML=keys.map(function(k){ var o=by[k],p=tot>0?o.total/tot*100:0,abierto=!!conAbiertos[k];
+      var natTag=o.nat==="directo"?'<span class="tag dir">Directo'+(o.cliente?" · "+esc(o.cliente):"")+'</span>':'<span class="tag ind">Indirecto</span>';
+      var html='<tr class="conrow" data-k="'+esc(k)+'" style="cursor:pointer"><td><span style="color:var(--ink-3);display:inline-block;width:14px">'+(abierto?"▾":"▸")+'</span><b>'+esc(k)+'</b></td><td>'+esc(o.proveedor||"—")+'</td><td>'+natTag+'</td><td class="r">'+eur2(o.mes)+'</td><td class="r"><b>'+eur2(o.total)+'</b></td><td class="r">'+(Math.round(p*10)/10).toLocaleString("es-ES")+'%</td></tr>';
+      if(abierto){
+        var dks=Object.keys(o.det).sort(function(a,b){return o.det[b].total-o.det[a].total;});
+        html+=dks.map(function(dk){ var d=o.det[dk],dp=o.total>0?d.total/o.total*100:0;
+          return '<tr style="cursor:default;background:var(--surface-2)"><td style="padding-left:34px;color:var(--ink-2)">'+esc(dk)+'</td><td></td><td></td><td class="r" style="color:var(--ink-2)">'+eur2(d.mes)+'</td><td class="r" style="color:var(--ink-2)">'+eur2(d.total)+'</td><td class="r" style="color:var(--ink-3)">'+(Math.round(dp*10)/10).toLocaleString("es-ES")+'%</td></tr>'; }).join("");
+      }
+      return html;
+    }).join("")+'<tr style="border-top:2px solid var(--line-strong)"><td><b>Total</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tot)+'</b></td><td class="r"><b>100%</b></td></tr>';
+    $$("#conBody .conrow").forEach(function(tr){ tr.addEventListener("click",function(){
+      var k=tr.dataset.k; if(conAbiertos[k])delete conAbiertos[k]; else conAbiertos[k]=1; conceptos(selPairs()); }); });
   }
   // Líneas mes a mes: ingresos, gastos y resultado
   function chartLines(s,cpairs,sel){
