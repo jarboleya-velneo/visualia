@@ -248,7 +248,7 @@
     <div class="grid2" style="margin-bottom:0">
       <div class="twrap">
         <table id="conTable">
-          <thead><tr><th>Concepto</th><th>Proveedor</th><th></th><th class="r">Mes equiv.</th><th class="r">Periodo</th></tr></thead>
+          <thead><tr><th>Concepto</th><th>Proveedor</th><th></th><th class="r">Mes equiv.</th><th class="r">Periodo</th><th class="r">%</th></tr></thead>
           <tbody id="conBody"></tbody>
         </table>
       </div>
@@ -684,7 +684,7 @@
       kpi("","Ingresos",eur(ingT),"Facturado · "+PL,delta(ingT,ingP))+
       kpi("","Costes directos",eur(dirT),"Ligados a cliente",delta(dirT,dirP,true))+
       kpi("","Costes indirectos",eur(indT),"Estructura",delta(indT,indP,true));
-    chartIVG(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs); clients(pairs); fillMovFilters(); movTable();
+    chartIVG(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs,s,chartPairs); clients(pairs); fillMovFilters(); movTable();
   }
   function kpi(cls,lab,val,sub,d,accent){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div><div class="sub">'+d+' '+sub+'</div></div>'; }
   function delta(cur,prev,inv){ if(!prev)return '<span class="delta flat">nuevo</span>'; var ch=(cur-prev)/Math.abs(prev)*100,up=ch>=0,good=inv?!up:up,cls=Math.abs(ch)<0.5?"flat":(good?"up":"down"),ar=Math.abs(ch)<0.5?"→":(up?"▲":"▼"); return '<span class="delta '+cls+'">'+ar+' '+pctf(ch)+'</span>'; }
@@ -770,25 +770,37 @@
     });
     return by;
   }
-  function conceptos(pairs){
+  function conceptos(pairs,series,cpairs){
     var by=conceptTotals(pairs),keys=Object.keys(by).sort(function(a,b){return by[b].total-by[a].total;});
-    if(!keys.length){ $("#conBody").innerHTML='<tr><td colspan="5" style="color:var(--ink-3)">Sin gastos en el periodo.</td></tr>'; $("#chartCon").innerHTML=""; return; }
-    $("#conHint").textContent="Cuánto cuesta cada cosa · mensual equivalente y total · "+periodLabel();
-    var tot=0; keys.forEach(function(k){tot+=by[k].total;});
-    $("#conBody").innerHTML=keys.map(function(k){ var o=by[k];
-      var natTag=o.nat==="directo"?'<span class="tag dir">Directo'+(o.cliente?" · "+esc(o.cliente):"")+'</span>':'<span class="tag ind">Indirecto</span>';
-      return '<tr><td><b>'+esc(k)+'</b></td><td>'+esc(o.proveedor||"—")+'</td><td>'+natTag+'</td><td class="r">'+eur2(o.mes)+'</td><td class="r"><b>'+eur2(o.total)+'</b></td></tr>';
-    }).join("")+'<tr style="border-top:2px solid var(--line-strong)"><td><b>Total</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tot)+'</b></td></tr>';
-    // barras horizontales (top 10)
-    var top=keys.slice(0,10),W=460,rowH=26,padL=4,padR=60,H=top.length*rowH+6;
-    var max=Math.max.apply(null,top.map(function(k){return by[k].total;}));
-    var g="";
-    top.forEach(function(k,i){ var o=by[k],w=Math.max(2,(W-padL-padR)*o.total/max),y=i*rowH+4;
-      g+='<rect x="'+padL+'" y="'+y+'" width="'+w+'" height="16" rx="4" fill="'+(o.nat==="directo"?"var(--s4)":"var(--s1)")+'" data-tip="<b>'+esc(k)+'</b><br><b>'+eur2(o.total)+'</b> en el periodo · '+eur2(o.mes)+'/mes"/>';
-      g+='<text x="'+(padL+6)+'" y="'+(y+12)+'" style="font-size:10.5px;fill:#fff;font-weight:650">'+esc(k.length>34?k.slice(0,33)+"…":k)+'</text>';
-      g+='<text class="axis-num" x="'+(padL+w+6)+'" y="'+(y+12)+'">'+eur(o.total)+'</text>'; });
-    $("#chartCon").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Gastos por concepto">'+g+'</svg>'+
-      '<div class="legend" style="margin-top:8px"><span><i class="dot" style="background:var(--s4)"></i> Directo</span><span><i class="dot" style="background:var(--s1)"></i> Indirecto</span></div>';
+    $("#conHint").textContent="Cuánto cuesta cada cosa · mensual equivalente, total y peso · "+periodLabel();
+    if(!keys.length){ $("#conBody").innerHTML='<tr><td colspan="6" style="color:var(--ink-3)">Sin gastos en el periodo.</td></tr>'; }
+    else {
+      var tot=0; keys.forEach(function(k){tot+=by[k].total;});
+      $("#conBody").innerHTML=keys.map(function(k){ var o=by[k],p=tot>0?o.total/tot*100:0;
+        var natTag=o.nat==="directo"?'<span class="tag dir">Directo'+(o.cliente?" · "+esc(o.cliente):"")+'</span>':'<span class="tag ind">Indirecto</span>';
+        return '<tr><td><b>'+esc(k)+'</b></td><td>'+esc(o.proveedor||"—")+'</td><td>'+natTag+'</td><td class="r">'+eur2(o.mes)+'</td><td class="r"><b>'+eur2(o.total)+'</b></td><td class="r">'+(Math.round(p*10)/10).toLocaleString("es-ES")+'%</td></tr>';
+      }).join("")+'<tr style="border-top:2px solid var(--line-strong)"><td><b>Total</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tot)+'</b></td><td class="r"><b>100%</b></td></tr>';
+    }
+    chartLines(series,cpairs);
+  }
+  // Líneas mes a mes: ingresos, gastos y resultado
+  function chartLines(s,cpairs){
+    var W=480,H=280,padL=48,padR=10,padT=14,padB=40,iw=W-padL-padR,ih=H-padT-padB,n=cpairs.length;
+    var res=s.ing.map(function(v,i){return v-s.gas[i];});
+    var mx=Math.max(1,Math.max.apply(null,s.ing),Math.max.apply(null,s.gas),Math.max.apply(null,res));
+    var mn=Math.min(0,Math.min.apply(null,res));
+    var step=niceStep(Math.max(1,mx-mn)),top=Math.ceil(mx/step)*step,bot=Math.floor(mn/step)*step,rng=Math.max(1,top-bot);
+    var X=function(i){return padL+iw*(i/(n-1));},Yv=function(v){return padT+ih-((v-bot)/rng)*ih;},g="";
+    for(var t=bot;t<=top;t+=step){ var y=Yv(t); g+='<line class="grid-line" x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'"/>'; g+='<text class="axis-num" x="'+(padL-6)+'" y="'+(y+3)+'" text-anchor="end">'+Math.round(t/1000)+'k</text>'; }
+    var y0=Yv(0); g+='<line class="baseline" x1="'+padL+'" y1="'+y0+'" x2="'+(W-padR)+'" y2="'+y0+'"/>';
+    var linea=function(arr,color,ancho){ var d=""; arr.forEach(function(v,i){ d+=(i?" L":"M")+X(i)+" "+Yv(v); });
+      return '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="'+ancho+'" stroke-linejoin="round" stroke-linecap="round"/>'; };
+    g+=linea(s.ing,"var(--income)",2.5)+linea(s.gas,"var(--expense)",2.5)+linea(res,"var(--accent)",2);
+    cpairs.forEach(function(p,i){ var lb=pairLab(p,i);
+      g+='<circle cx="'+X(i)+'" cy="'+Yv(res[i])+'" r="9" fill="transparent" style="cursor:pointer" data-tip="<b>'+lb+'</b><br>Ingresos <b>'+eur2(s.ing[i])+'</b><br>Gastos <b>'+eur2(s.gas[i])+'</b><br>Resultado <b>'+eur2(res[i])+'</b>"/>';
+      g+='<text class="axis" x="'+X(i)+'" y="'+(H-22)+'" text-anchor="middle">'+lb+'</text>'; });
+    $("#chartCon").innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ingresos, gastos y resultado por mes">'+g+'</svg>'+
+      '<div class="legend" style="margin-top:6px"><span><i class="dot" style="background:var(--income)"></i> Ingresos</span><span><i class="dot" style="background:var(--expense)"></i> Gastos</span><span><i class="dot" style="background:var(--accent)"></i> Resultado</span></div>';
     wireTips("#chartCon");
   }
   function clients(pairs){
