@@ -25,8 +25,14 @@
 var SHEET_MOV = 'Movimientos';
 var SHEET_PRE = 'Presupuesto';
 var SHEET_MAS = 'Maestros';
+var SHEET_CAN = 'Canales';
+var SHEET_MSG = 'Mensajes';
+var SHEET_TAR = 'Tareas';
+var CAN_HEADERS = ['id','nombre','cliente','desc','v'];
+var MSG_HEADERS = ['id','canal','autor','texto','ts','reacciones','tareaId','del','v'];
+var TAR_HEADERS = ['id','canal','cliente','titulo','detalle','estado','persona','prioridad','fecha','vence','del','v'];
 var HEADERS = ['id','tipo','freq','periodicidad','categoria','concepto','cliente','proveedor','persona','importe','naturaleza','desde','hasta','mes'];
-var PRE_HEADERS = ['ejercicio','categoria','importe_anual'];
+var PRE_HEADERS = ['ejercicio','categoria','importe_anual','m01','m02','m03','m04','m05','m06','m07','m08','m09','m10','m11','m12'];
 var MAS_HEADERS = ['tipo','nombre','nif','email','telefono','rol','categoria','naturaleza','proveedor','notas'];
 
 function setup() {
@@ -37,10 +43,21 @@ function setup() {
   if (pre.getLastRow() === 0) pre.appendRow(PRE_HEADERS);
   var mas = ss.getSheetByName(SHEET_MAS) || ss.insertSheet(SHEET_MAS);
   if (mas.getLastRow() === 0) mas.appendRow(MAS_HEADERS);
+  var can = ss.getSheetByName(SHEET_CAN) || ss.insertSheet(SHEET_CAN);
+  if (can.getLastRow() === 0) can.appendRow(CAN_HEADERS);
+  var msg = ss.getSheetByName(SHEET_MSG) || ss.insertSheet(SHEET_MSG);
+  if (msg.getLastRow() === 0) msg.appendRow(MSG_HEADERS);
+  var tar = ss.getSheetByName(SHEET_TAR) || ss.insertSheet(SHEET_TAR);
+  if (tar.getLastRow() === 0) tar.appendRow(TAR_HEADERS);
 }
 
 function doGet() {
-  return json({ items: readItems(), budget: readBudget(), masters: readMasters() });
+  return json({
+    items: readItems(), budget: readBudget(), masters: readMasters(),
+    canales: readRows(SHEET_CAN, CAN_HEADERS),
+    mensajes: readRows(SHEET_MSG, MSG_HEADERS),
+    tareas: readRows(SHEET_TAR, TAR_HEADERS)
+  });
 }
 
 function doPost(e) {
@@ -53,6 +70,12 @@ function doPost(e) {
       if (body.budget) writeBudget(body.budget);
       if (body.masters) writeMasters(body.masters);
       return json({ ok: true, count: (body.items || []).length });
+    }
+    if (body.action === 'replaceHub') {
+      writeRows(SHEET_CAN, CAN_HEADERS, body.canales || []);
+      writeRows(SHEET_MSG, MSG_HEADERS, body.mensajes || []);
+      writeRows(SHEET_TAR, TAR_HEADERS, body.tareas || []);
+      return json({ ok: true, mensajes: (body.mensajes || []).length, tareas: (body.tareas || []).length });
     }
     return json({ error: 'accion desconocida' });
   } catch (err) {
@@ -108,6 +131,7 @@ function writeItems(items) {
 }
 
 // Presupuesto: una fila por (ejercicio, categoria) -> { "2026": { cat: importe } }
+// El valor es un anual (importe_anual) o, si hay detalle mensual, un array de 12 (m01..m12).
 function readBudget() {
   var sh = sheet(SHEET_PRE);
   var values = sh.getDataRange().getValues();
@@ -123,7 +147,10 @@ function readBudget() {
     }
     var ej = String(r[0]);
     out[ej] = out[ej] || {};
-    if (r[1]) out[ej][r[1]] = Number(r[2]) || 0;
+    if (!r[1]) return;
+    var meses = r.slice(3, 15).map(function (v) { return Number(v) || 0; });
+    var hayMeses = meses.some(function (v) { return v > 0; });
+    out[ej][r[1]] = hayMeses ? meses : (Number(r[2]) || 0);
   });
   return out;
 }
@@ -134,7 +161,13 @@ function writeBudget(budget) {
   var rows = [PRE_HEADERS];
   Object.keys(budget).sort().forEach(function (ej) {
     Object.keys(budget[ej] || {}).forEach(function (cat) {
-      rows.push([ej, cat, budget[ej][cat]]);
+      var v = budget[ej][cat];
+      if (Object.prototype.toString.call(v) === '[object Array]') {
+        var total = v.reduce(function (a, x) { return a + (Number(x) || 0); }, 0);
+        rows.push([ej, cat, total].concat(v.map(function (x) { return Number(x) || 0; })));
+      } else {
+        rows.push([ej, cat, Number(v) || 0].concat(['','','','','','','','','','','','']));
+      }
     });
   });
   sh.getRange(1, 1, rows.length, PRE_HEADERS.length).setValues(rows);
@@ -176,6 +209,44 @@ function writeMasters(masters) {
   var rng = sh.getRange(1, 1, rows.length, MAS_HEADERS.length);
   rng.setNumberFormat('@');
   rng.setValues(rows);
+}
+
+// Colecciones del hub (Canales/Mensajes/Tareas): filas planas con cabecera fija.
+// "reacciones" viaja como JSON; ts y v son numéricos.
+function readRows(name, headers) {
+  var sh = sheet(name);
+  var values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+  var head = values[0].map(String);
+  return values.slice(1).filter(function (r) { return String(r[0]).length; }).map(function (r) {
+    var o = {};
+    head.forEach(function (h, i) {
+      var v = r[i];
+      if (v == null || v === '') return;
+      if (h === 'ts' || h === 'v') o[h] = Number(v) || 0;
+      else if (h === 'del') o[h] = 1;
+      else if (h === 'reacciones') { try { o[h] = JSON.parse(v); } catch (e) { o[h] = {}; } }
+      else o[h] = v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(v);
+    });
+    return o;
+  });
+}
+
+function writeRows(name, headers, rows) {
+  var sh = sheet(name);
+  sh.clear();
+  var out = [headers];
+  rows.forEach(function (rec) {
+    out.push(headers.map(function (h) {
+      var v = rec[h];
+      if (v == null) return '';
+      if (h === 'reacciones') return JSON.stringify(v);
+      return v;
+    }));
+  });
+  var rng = sh.getRange(1, 1, out.length, headers.length);
+  rng.setNumberFormat('@');
+  rng.setValues(out);
 }
 
 function json(obj) {

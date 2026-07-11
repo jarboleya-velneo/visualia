@@ -1,10 +1,11 @@
-# ViMi · Control Financiero — Visual Inteligencia
+# ViMi · Visual Inteligencia — Dashboard financiero + Hub de equipo
 
-Control de **presupuesto e ingresos/gastos** de la división **Visual Inteligencia** (Jesús &amp; Bea).
+Herramientas de gestión de la división **Visual Inteligencia** (Jesús &amp; Bea). Objetivos: **break-even en 2026** y el **mejor ARR neto × ViMi del grupo en 2027**.
 
-Dos piezas, sin backend propio ni base de datos:
+Piezas, sin backend propio ni base de datos:
 
-1. **La hoja de cálculo** (Google Sheets) = **fuente de verdad** compartida.
+1. **La hoja de cálculo** (Google Sheets) = **fuente de verdad** compartida para todo (finanzas, mensajes, tareas y maestros).
+2. **El Hub** (`hub/index.html`) — el «Slack» de la división: **canales** (#general, #finanzas, #informes y uno por cliente, creados solos desde el maestro), **chat** con @menciones y reacciones, **convertir mensaje en tarea** (☑ al pasar el ratón), **panel de tareas** por canal (estado, responsable, prioridad, vencimiento; migradas desde la antigua hoja de tareas), **generador de informes por cliente** (tareas del periodo + resumen económico) y la tira de KPIs con ARR neto × ViMi y progreso hacia el break-even. Publicado en `/hub/`.
 2. **El dashboard** (`dashboard/index.html`, un solo fichero, sin dependencias) que **lee y escribe** en la hoja: KPIs, gráficas interanuales, alta/edición/borrado/duplicado de movimientos (individual y **en lote con multiselección**), **editor de presupuesto por ejercicio**, **maestros** (clientes, proveedores, personas/ViMis, conceptos y categorías) y **resultado por cliente** — todo **sin abrir la hoja**. Filtros por **ejercicio y trimestre** más búsqueda de texto. Responsive (escritorio + iPhone), tema claro/oscuro.
 
 ## Estructura
@@ -66,7 +67,8 @@ Cada fila es un ingreso o gasto. Columnas (iguales en la hoja *Movimientos* y en
 
 Otras pestañas de la hoja:
 
-- **Presupuesto**: una fila por (`ejercicio`, `categoria`, `importe_anual`). Se edita desde el dashboard (botón ✎ Presupuesto) o a mano.
+- **Presupuesto**: una fila por (`ejercicio`, `categoria`, `importe_anual`, `m01`…`m12`). Un anual se **prorratea** en el seguimiento mensual/trimestral; con el botón **12** del editor se detalla **mes a mes** (las columnas `m01`…`m12`; el anual pasa a ser la suma). Se edita desde el dashboard (✎ Presupuesto) o a mano.
+- **Canales / Mensajes / Tareas**: colecciones del Hub (una fila por registro; `reacciones` viaja como JSON). El Hub sincroniza contra la misma URL del Apps Script que el dashboard.
 - **Maestros**: una fila por ficha con columnas `tipo`, `nombre`, `nif`, `email`, `telefono`, `rol`, `categoria`, `naturaleza`, `proveedor`, `notas` (cada tipo usa sus columnas). Tipos: `clientes`, `proveedores`, `personas`, `conceptosIngreso`, `conceptosGasto`, `categoriasIngreso`, `categoriasGasto`. Se gestionan desde el dashboard (botón **Maestros**: pestañas por maestro, crear/editar/eliminar fichas). Renombrar una ficha propaga el cambio a los movimientos y al presupuesto; no se puede eliminar una ficha en uso. Los conceptos admiten **valores por defecto** (categoría, naturaleza, proveedor) que se autorrellenan al elegirlos en el formulario. Lo que escribas nuevo en un movimiento crea la ficha sola.
 
 ## Trabajar con la tabla de movimientos
