@@ -1,13 +1,16 @@
 /**
- * ViMi · Servidor local de datos + estáticos
- * ------------------------------------------
- * Sustituye a la hoja de Google mientras no esté disponible: sirve el
- * dashboard y el hub por HTTP y expone la misma API que el Apps Script
- * (GET todo / POST action "replace" | "replaceHub"), guardando los datos
- * en un JSON en disco (server/data/vimi-data.json).
+ * ViMi · Servidor local: estáticos + proxy de la hoja de Google
+ * --------------------------------------------------------------
+ * Sirve el dashboard y el hub por HTTP en la red local y reenvía /api
+ * a la web app de Apps Script (la Google Sheet es la fuente de verdad).
+ * Así el iPhone y el Mac usan /api sin configurar nada, y producción
+ * (GitHub Pages) usa la misma hoja pegando la URL /exec en el menú ⋯.
+ *
+ * La URL del Apps Script se lee de server/data/config.json (gitignorado):
+ *   { "appsScriptUrl": "https://script.google.com/macros/s/…/exec" }
+ * Sin config, funciona como antes: almacenamiento en vimi-data.json.
  *
  * Uso:  node server/server.js  [puerto]   (por defecto 8090)
- * Acceso desde el iPhone: http://IP-del-Mac:8090/dashboard/
  */
 var http = require("http");
 var fs = require("fs");
@@ -17,16 +20,19 @@ var PORT = parseInt(process.argv[2], 10) || 8090;
 var ROOT = path.join(__dirname, "..");
 var DATA_DIR = path.join(__dirname, "data");
 var DATA_FILE = path.join(DATA_DIR, "vimi-data.json");
+var CONFIG_FILE = path.join(DATA_DIR, "config.json");
 
 var VACIO = { items: [], budget: {}, masters: {}, canales: [], mensajes: [], tareas: [] };
 
-function leerDatos() {
+function config() {
+  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8")); } catch (e) { return {}; }
+}
+function leerCache() {
   try { return JSON.parse(fs.readFileSync(DATA_FILE, "utf8")); }
   catch (e) { return JSON.parse(JSON.stringify(VACIO)); }
 }
-
-// Escritura atómica: tmp + rename, y copia de seguridad diaria rotada (7 días)
-function guardarDatos(d) {
+// Copia local: caché de lectura si la hoja no responde + backup diario (7 días)
+function guardarCache(d) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   var tmp = DATA_FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(d, null, 1));
@@ -38,6 +44,47 @@ function guardarDatos(d) {
     fs.readdirSync(DATA_DIR).filter(function (f) { return /^backup-\d{4}-\d{2}-\d{2}\.json$/.test(f); })
       .sort().slice(0, -7).forEach(function (f) { fs.unlinkSync(path.join(DATA_DIR, f)); });
   }
+}
+
+function apiGet(res) {
+  var url = config().appsScriptUrl;
+  if (!url) { return respondeJson(res, leerCache()); }
+  fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+    guardarCache(d);
+    respondeJson(res, d);
+  }).catch(function () {
+    respondeJson(res, leerCache()); // sin conexión: última copia conocida
+  });
+}
+
+function apiPost(res, body) {
+  var url = config().appsScriptUrl;
+  if (!url) { // modo antiguo: almacenamiento local
+    try {
+      var b = JSON.parse(body || "{}"), d = leerCache(), out;
+      if (b.action === "replace") { d.items = b.items || []; if (b.budget) d.budget = b.budget; if (b.masters) d.masters = b.masters; guardarCache(d); out = { ok: true, count: d.items.length }; }
+      else if (b.action === "replaceHub") { d.canales = b.canales || []; d.mensajes = b.mensajes || []; d.tareas = b.tareas || []; guardarCache(d); out = { ok: true }; }
+      else out = { error: "accion desconocida" };
+      return respondeJson(res, out);
+    } catch (e) { return respondeJson(res, { error: String(e) }); }
+  }
+  fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: body })
+    .then(function (r) { return r.text(); })
+    .then(function (t) {
+      var out; try { out = JSON.parse(t); } catch (e) { out = { ok: true }; } // la redirección de Google a veces no devuelve JSON
+      try { var b = JSON.parse(body || "{}"), d = leerCache();
+        if (b.action === "replace") { d.items = b.items || []; d.budget = b.budget || d.budget; d.masters = b.masters || d.masters; }
+        if (b.action === "replaceHub") { d.canales = b.canales || []; d.mensajes = b.mensajes || []; d.tareas = b.tareas || []; }
+        guardarCache(d);
+      } catch (e) {}
+      respondeJson(res, out);
+    })
+    .catch(function (e) { respondeJson(res, { error: "sin conexión con la hoja: " + e.message }); });
+}
+
+function respondeJson(res, obj) {
+  res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(obj));
 }
 
 var MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css",
@@ -62,34 +109,16 @@ http.createServer(function (req, res) {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
-    if (req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-      return res.end(JSON.stringify(leerDatos()));
-    }
+    if (req.method === "GET") return apiGet(res);
     if (req.method === "POST") {
       var body = "";
       req.on("data", function (c) { body += c; if (body.length > 20e6) req.destroy(); });
-      req.on("end", function () {
-        var out;
-        try {
-          var b = JSON.parse(body || "{}");
-          var d = leerDatos();
-          if (b.action === "replace") {
-            d.items = b.items || []; if (b.budget) d.budget = b.budget; if (b.masters) d.masters = b.masters;
-            guardarDatos(d); out = { ok: true, count: d.items.length };
-          } else if (b.action === "replaceHub") {
-            d.canales = b.canales || []; d.mensajes = b.mensajes || []; d.tareas = b.tareas || [];
-            guardarDatos(d); out = { ok: true, mensajes: d.mensajes.length, tareas: d.tareas.length };
-          } else out = { error: "accion desconocida" };
-        } catch (e) { out = { error: String(e) }; }
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify(out));
-      });
+      req.on("end", function () { apiPost(res, body); });
       return;
     }
     res.writeHead(405); return res.end();
   }
   servirEstatico(req, res);
 }).listen(PORT, "0.0.0.0", function () {
-  console.log("ViMi servidor en http://0.0.0.0:" + PORT + "  (datos: " + DATA_FILE + ")");
+  console.log("ViMi servidor en http://0.0.0.0:" + PORT + (config().appsScriptUrl ? "  (proxy de la hoja de Google)" : "  (almacenamiento local)"));
 });
