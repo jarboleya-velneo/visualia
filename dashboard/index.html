@@ -213,6 +213,10 @@
     </div>
     <div class="seg" id="yearSeg" role="group" aria-label="Ejercicio"></div>
     <div class="seg small" id="qSeg" role="group" aria-label="Trimestre"></div>
+    <div class="seg small" id="vistaSeg" role="group" aria-label="Vista" title="Real: solo apuntes reales · Previsión: incluye previsiones">
+      <button data-v="real" aria-pressed="true">Real</button>
+      <button data-v="prev" aria-pressed="false">Previsión</button>
+    </div>
     <a class="btn" id="hubLink" href="hub/" style="height:38px;display:inline-flex;align-items:center;text-decoration:none" title="ViMi Hub — equipo y tareas">💬 Hub</a>
     <button class="btn" id="mastersBtn" style="height:38px" aria-label="Maestros">Maestros</button>
     <button class="icon-btn" id="themeBtn" title="Cambiar tema" aria-label="Cambiar tema">◐</button>
@@ -245,7 +249,7 @@
       <div class="phead"><div><h2>Presupuesto vs. real</h2><p class="hint" id="budHint">Ejecución del ejercicio por categoría</p></div>
         <button class="btn primary" id="budEditBtn">✎ Editar presupuesto</button></div>
       <div id="chartBud"></div>
-      <div class="legend" style="margin-bottom:12px"><span><i class="dot" style="background:var(--income)"></i> Ingresos reales</span><span><i class="dot" style="background:var(--expense)"></i> Gastos reales</span><span><i class="dot" style="background:var(--income);height:3px;border-radius:2px;width:14px"></i> Ppto. ingresos</span><span><i class="dot" style="background:var(--expense);height:3px;border-radius:2px;width:14px"></i> Ppto. gastos</span></div>
+      <div class="legend" style="margin-bottom:12px"><span><i class="dot" style="background:var(--income)"></i> Ingresos (según vista)</span><span><i class="dot" style="background:var(--expense)"></i> Gastos (según vista)</span><span><i class="dot" style="background:var(--income);height:3px;border-radius:2px;width:14px"></i> Ppto. ingresos</span><span><i class="dot" style="background:var(--expense);height:3px;border-radius:2px;width:14px"></i> Ppto. gastos</span></div>
       <div id="budget"></div>
     </div>
   </div>
@@ -592,6 +596,7 @@
     s.budget=normBudget(s.budget);
     s.masters=normMasters(s.masters);
     s.quarter=s.quarter||0;
+    s.vista=s.vista||"real";
     s.year=s.year||new Date().getFullYear();
     harvestMasters(s);
     return s;
@@ -661,8 +666,11 @@
       return "Interanual · "+MONTHS[a.m]+" "+a.Y+" → "+MONTHS[z.m]+" "+z.Y; }
     return q?("T"+q+" "+state.year):("Ejercicio "+state.year); }
   function sumPairs(it,pairs,soloReal){ var t=0; pairs.forEach(function(p){t+=inRange(it,p.Y,p.m,soloReal);}); return t; }
-  function seriesPairs(pairs){ var n=pairs.length,ing=Array(n).fill(0),gas=Array(n).fill(0);
-    state.items.forEach(function(it){ pairs.forEach(function(p,i){ var a=inRange(it,p.Y,p.m); if(!a)return;
+  // Vista global Real/Previsión: "real" excluye los apuntes de previsión en
+  // gráficos, conceptos y clientes; "prev" los incluye (los KPIs muestran ambas)
+  function vistaReal(){ return state.vista!=="prev"; }
+  function seriesPairs(pairs){ var n=pairs.length,ing=Array(n).fill(0),gas=Array(n).fill(0),sr=vistaReal();
+    state.items.forEach(function(it){ if(sr&&it.prevision)return; pairs.forEach(function(p,i){ var a=inRange(it,p.Y,p.m,sr); if(!a)return;
       if(it.tipo==="ingreso")ing[i]+=a; else gas[i]+=a; }); });
     return {ing:ing,gas:gas}; }
   function totalsPairs(pairs,soloReal){ var ing=0,gas=0,dir=0,ind=0;
@@ -683,8 +691,8 @@
   function catTotals(pairs,soloReal){ var t={}; state.items.forEach(function(it){ if(it.tipo!=="gasto")return; if(soloReal&&it.prevision)return; var s=sumPairs(it,pairs,soloReal); if(s)t[it.categoria]=(t[it.categoria]||0)+s; }); return t; }
   function incTotals(pairs,soloReal){ var t={}; state.items.forEach(function(it){ if(it.tipo!=="ingreso")return; if(soloReal&&it.prevision)return; var s=sumPairs(it,pairs,soloReal); if(s)t[it.categoria]=(t[it.categoria]||0)+s; }); return t; }
   function clientTotals(pairs){
-    var by={},ind=0,ingTot=0;
-    state.items.forEach(function(it){ var s=sumPairs(it,pairs); if(!s)return;
+    var by={},ind=0,ingTot=0,sr=vistaReal();
+    state.items.forEach(function(it){ if(sr&&it.prevision)return; var s=sumPairs(it,pairs,sr); if(!s)return;
       if(it.tipo==="ingreso"){ var k=it.cliente||"— sin cliente"; by[k]=by[k]||{ing:0,dir:0}; by[k].ing+=s; ingTot+=s; }
       else if(natDe(it)==="directo"){ var k2=it.cliente||"— sin cliente"; by[k2]=by[k2]||{ing:0,dir:0}; by[k2].dir+=s; }
       else if(!esPersonal(it.categoria)) ind+=s; }); // los costes de personal (nóminas) no se reparten
@@ -695,27 +703,28 @@
   function render(){
     var Y=state.year, ia=state.quarter==="ia", pairs=selPairs(), prev=prevPairs(pairs);
     var chartPairs=ia?pairs:yearPairs(Y), s=seriesPairs(chartPairs);
-    var t=totalsPairs(pairs,true),tp=totalsPairs(prev,true),tF=totalsPairs(pairs);
+    var sr=vistaReal(),lbl=sr?"real":"previsto",lblO=sr?"previsto":"real";
+    var t=totalsPairs(pairs,sr),tp=totalsPairs(prev,sr),tF=totalsPairs(pairs,!sr);
     var ingT=t.ing,gasT=t.gas,dirT=t.dir,indT=t.ind,net=ingT-gasT;
     var netP=tp.ing-tp.gas,ingP=tp.ing,dirP=tp.dir,indP=tp.ind;
     var netF=tF.ing-tF.gas,hayPrev=(tF.ing!==t.ing||tF.gas!==t.gas);
-    var pv=function(v){ return hayPrev?eur(v):""; };
-    var A=arrKpi(pairs,true),Ap=arrKpi(prev,true),AF=arrKpi(pairs),margin=ingT>0?net/ingT*100:0,PL=periodLabel();
-    var nV=Math.max(1,state.masters.personas.length),ANV=arrNet(pairs,true)/nV,ANVp=arrNet(prev,true)/nV,ANVF=arrNet(pairs)/nV;
+    var pv=function(v){ return hayPrev?(lblO+" "+eur(v)):""; };
+    var A=arrKpi(pairs,sr),Ap=arrKpi(prev,sr),AF=arrKpi(pairs,!sr),margin=ingT>0?net/ingT*100:0,PL=periodLabel();
+    var nV=Math.max(1,state.masters.personas.length),ANV=arrNet(pairs,sr)/nV,ANVp=arrNet(prev,sr)/nV,ANVF=arrNet(pairs,!sr)/nV;
     $("#ivgYear").textContent=ia?(PL+" — con los ingresos y gastos actuales"):("Ejercicio "+Y+(state.quarter?" · T"+state.quarter+" resaltado":""));
     $("#donutHint").textContent="Por categoría · "+PL;
     $("#cliHint").textContent="Ingresos − directos − indirectos repartidos por facturación (sin costes de personal) · pulsa una fila para ver sus movimientos · "+PL;
     $("#budHint").textContent="Ejecución por categoría · "+PL+(state.quarter?" (anuales prorrateados)":"");
     $("#kpis").innerHTML=
-      kpi("hero","ARR neto × ViMi",eur(ANV),"real, sin nóminas, entre "+nV+" ViMis",delta(ANV,ANVp),"var(--brass)",pv(ANVF))+
-      kpi("hero","Resultado neto",eur(net),"real · margen "+Math.round(margin)+"% · "+PL,delta(net,netP),"var(--accent)",pv(netF))+
-      kpi("","ARR",eur(A),"real",delta(A,Ap),"",pv(AF))+
-      kpi("","Ingresos",eur(ingT),"real · "+PL,delta(ingT,ingP),"",pv(tF.ing))+
-      kpi("","Costes directos",eur(dirT),"real",delta(dirT,dirP,true),"",pv(tF.dir))+
-      kpi("","Costes indirectos",eur(indT),"real",delta(indT,indP,true),"",pv(tF.ind));
-    chartLines(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs); clients(pairs); fillMovFilters(); movTable();
+      kpi("hero","ARR neto × ViMi",eur(ANV),lbl+", sin nóminas, entre "+nV+" ViMis",delta(ANV,ANVp),"var(--brass)",pv(ANVF))+
+      kpi("hero","Resultado neto",eur(net),lbl+" · margen "+Math.round(margin)+"% · "+PL,delta(net,netP),"var(--accent)",pv(netF))+
+      kpi("","ARR",eur(A),lbl,delta(A,Ap),"",pv(AF))+
+      kpi("","Ingresos",eur(ingT),lbl+" · "+PL,delta(ingT,ingP),"",pv(tF.ing))+
+      kpi("","Costes directos",eur(dirT),lbl,delta(dirT,dirP,true),"",pv(tF.dir))+
+      kpi("","Costes indirectos",eur(indT),lbl,delta(indT,indP,true),"",pv(tF.ind));
+    chartLines(s,chartPairs); donut(catTotals(pairs,sr)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs); clients(pairs); fillMovFilters(); movTable();
   }
-  function kpi(cls,lab,val,sub,d,accent,prev){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div>'+(prev?'<div class="kprev">previsto '+prev+'</div>':'')+'<div class="sub">'+d+' '+sub+'</div></div>'; }
+  function kpi(cls,lab,val,sub,d,accent,prev){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div>'+(prev?'<div class="kprev">'+prev+'</div>':'')+'<div class="sub">'+d+' '+sub+'</div></div>'; }
   function delta(cur,prev,inv){ if(!prev)return '<span class="delta flat">nuevo</span>'; var ch=(cur-prev)/Math.abs(prev)*100,up=ch>=0,good=inv?!up:up,cls=Math.abs(ch)<0.5?"flat":(good?"up":"down"),ar=Math.abs(ch)<0.5?"→":(up?"▲":"▼"); return '<span class="delta '+cls+'">'+ar+' '+pctf(ch)+'</span>'; }
 
   function pairLab(p,i){ return MONTHS[p.m]+((p.m===0||i===0)&&state.quarter==="ia"?" ’"+String(p.Y).slice(2):""); }
@@ -840,9 +849,9 @@
   }
 
   function conceptTotals(pairs){ // gasto por concepto en el periodo (+ mensual equivalente)
-    var by={};
-    state.items.forEach(function(it){ if(it.tipo!=="gasto")return;
-      var t=sumPairs(it,pairs); if(!t)return;
+    var by={},sr=vistaReal();
+    state.items.forEach(function(it){ if(it.tipo!=="gasto")return; if(sr&&it.prevision)return;
+      var t=sumPairs(it,pairs,sr); if(!t)return;
       var k=it.concepto||"(sin concepto)";
       var o=by[k]=by[k]||{total:0,mes:0,proveedor:it.proveedor||"",nat:natDe(it),cliente:it.cliente||"",det:{}};
       var mes=(it.pct>0)?t/pairs.length:((it.freq==="recurrente")?it.importe/(it.periodicidad||1):t/pairs.length);
@@ -1317,6 +1326,9 @@
       if(q[0]==="ia")b.title="Interanual: próximos 12 meses manteniendo los ingresos y gastos actuales";
       b.setAttribute("aria-pressed",(state.quarter||0)===q[0]);
       b.onclick=function(){ state.quarter=q[0]; saveLocal(); buildQuarters(); render(); }; seg.appendChild(b); }); }
+  function buildVista(){ $$("#vistaSeg button").forEach(function(b){
+    b.setAttribute("aria-pressed",String((state.vista||"real")===b.dataset.v));
+    b.onclick=function(){ state.vista=b.dataset.v; saveLocal(); buildVista(); render(); }; }); }
 
   var toastT; function toast(m){ var el=$("#toast"); el.textContent=m; el.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(function(){el.classList.remove("show");},1800); }
 
@@ -1387,6 +1399,7 @@
   setSync();
   buildYears();
   buildQuarters();
+  buildVista();
   render();
   if(syncUrl){ pullSheet().then(function(){ buildYears(); buildQuarters(); render(); }); }
 })();
