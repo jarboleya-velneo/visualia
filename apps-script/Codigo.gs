@@ -39,7 +39,7 @@ var SHEET_TAR = 'Tareas';
 var CAN_HEADERS = ['id','nombre','cliente','desc','v'];
 var MSG_HEADERS = ['id','canal','autor','texto','ts','reacciones','tareaId','del','v'];
 var TAR_HEADERS = ['id','canal','cliente','titulo','detalle','estado','persona','prioridad','fecha','vence','del','v'];
-var HEADERS = ['id','tipo','freq','periodicidad','categoria','concepto','cliente','proveedor','persona','importe','pct','naturaleza','desde','hasta','mes'];
+var HEADERS = ['id','tipo','freq','periodicidad','categoria','concepto','cliente','proveedor','persona','importe','pct','naturaleza','prevision','desde','hasta','mes'];
 var PRE_HEADERS = ['ejercicio','categoria','importe_anual','m01','m02','m03','m04','m05','m06','m07','m08','m09','m10','m11','m12'];
 var MAS_HEADERS = ['tipo','nombre','nif','email','telefono','rol','categoria','naturaleza','proveedor','notas'];
 

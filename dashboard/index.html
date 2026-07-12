@@ -275,6 +275,7 @@
       <select id="fltCliente"></select>
       <select id="fltProveedor"></select>
       <select id="fltCat"></select>
+      <select id="fltPrev"><option value="">Real + previsión</option><option value="real">Solo real</option><option value="prev">Solo previsiones</option></select>
     </div>
     <div class="bulkbar" id="bulkBar">
       <span id="bulkCount"></span><span class="spacer"></span>
@@ -353,6 +354,14 @@
       <input id="fRepeat" type="number" min="1" max="60" step="1" value="1">
       <div class="help">Genera esa cantidad de apuntes separados según la periodicidad elegida (p. ej. 6 cuotas mensuales, o 4 pagos trimestrales).</div>
     </div>
+    <div class="field">
+      <label>Registro</label>
+      <div class="toggle2" id="tgPrev">
+        <button type="button" data-v="" aria-pressed="true">Real</button>
+        <button type="button" data-v="1" aria-pressed="false">Previsión</button>
+      </div>
+      <div class="help">Las previsiones se excluyen de los KPIs «reales» y se incluyen en los «previstos».</div>
+    </div>
     <div class="field" id="fldNat">
       <label>Naturaleza del coste</label>
       <div class="toggle2" id="tgNat">
@@ -380,6 +389,8 @@
     <div class="field"><label>Proveedor</label><select id="bProveedor"></select></div>
     <div class="field"><label>Naturaleza (gastos)</label>
       <select id="bNat"><option value="">— no cambiar —</option><option value="directo">Directo</option><option value="indirecto">Indirecto</option></select></div>
+    <div class="field"><label>Registro</label>
+      <select id="bPrev"><option value="">— no cambiar —</option><option value="real">Real</option><option value="prev">Previsión</option></select></div>
     <div class="modal-actions">
       <button class="btn ghost" id="bCancel">Cancelar</button>
       <button class="btn primary" id="bSave">Aplicar</button>
@@ -508,6 +519,7 @@
     it.periodicidad=Math.max(1,parseInt(it.periodicidad,10)||1);
     it.naturaleza=it.naturaleza||it.nat||"indirecto"; delete it.nat;
     it.importe=Number(it.importe)||0; it.pct=Number(it.pct)||0;
+    it.prevision=(it.prevision&&String(it.prevision)!=="0")?1:"";
     ["desde","hasta","mes"].forEach(function(k){ var v=it[k]; if(v==null){it[k]="";return;} v=String(v); it[k]=/^\d{4}-\d{2}/.test(v)?v.slice(0,7):""; });
     it.cliente=it.cliente||""; it.proveedor=it.proveedor||""; it.persona=it.persona||"";
     if(!it.id) it.id=uid();
@@ -638,19 +650,19 @@
     state.items.forEach(function(it){ pairs.forEach(function(p,i){ var a=inRange(it,p.Y,p.m); if(!a)return;
       if(it.tipo==="ingreso")ing[i]+=a; else gas[i]+=a; }); });
     return {ing:ing,gas:gas}; }
-  function totalsPairs(pairs){ var ing=0,gas=0,dir=0,ind=0;
-    state.items.forEach(function(it){ var v=sumPairs(it,pairs); if(!v)return;
+  function totalsPairs(pairs,soloReal){ var ing=0,gas=0,dir=0,ind=0;
+    state.items.forEach(function(it){ if(soloReal&&it.prevision)return; var v=sumPairs(it,pairs); if(!v)return;
       if(it.tipo==="ingreso")ing+=v; else{gas+=v; if(natDe(it)==="directo")dir+=v; else ind+=v;} });
     return {ing:ing,gas:gas,dir:dir,ind:ind}; }
   function arr12(it){
     if(it.pct>0){ var now=new Date(); return ingresosMes(now.getFullYear(),now.getMonth())*it.pct/100*12/(it.periodicidad||1); }
     return it.importe*12/(it.periodicidad||1); }
-  function arrKpi(pairs){ var last=pairs[pairs.length-1],t=0;
-    state.items.forEach(function(it){ if(it.tipo==="ingreso"&&activeAt(it,last.Y,last.m)) t+=arr12(it); }); return t; }
+  function arrKpi(pairs,soloReal){ var last=pairs[pairs.length-1],t=0;
+    state.items.forEach(function(it){ if(soloReal&&it.prevision)return; if(it.tipo==="ingreso"&&activeAt(it,last.Y,last.m)) t+=arr12(it); }); return t; }
   function esPersonal(cat){ var rec=mFind("categoriasGasto",cat); return !!(rec&&rec.personal==="si"); }
-  function arrNet(pairs){ // ARR de ingresos menos costes recurrentes activos (sin nóminas/personal), anualizado
+  function arrNet(pairs,soloReal){ // ARR de ingresos menos costes recurrentes activos (sin nóminas/personal), anualizado
     var last=pairs[pairs.length-1],t=0;
-    state.items.forEach(function(it){ if(!activeAt(it,last.Y,last.m))return;
+    state.items.forEach(function(it){ if(soloReal&&it.prevision)return; if(!activeAt(it,last.Y,last.m))return;
       if(it.tipo==="gasto"&&esPersonal(it.categoria))return;
       t+=(it.tipo==="ingreso"?1:-1)*arr12(it); }); return t; }
   function catTotals(pairs){ var t={}; state.items.forEach(function(it){ if(it.tipo!=="gasto")return; var s=sumPairs(it,pairs); if(s)t[it.categoria]=(t[it.categoria]||0)+s; }); return t; }
@@ -668,22 +680,24 @@
   function render(){
     var Y=state.year, ia=state.quarter==="ia", pairs=selPairs(), prev=prevPairs(pairs);
     var chartPairs=ia?pairs:yearPairs(Y), s=seriesPairs(chartPairs);
-    var t=totalsPairs(pairs),tp=totalsPairs(prev);
+    var t=totalsPairs(pairs,true),tp=totalsPairs(prev,true),tF=totalsPairs(pairs);
     var ingT=t.ing,gasT=t.gas,dirT=t.dir,indT=t.ind,net=ingT-gasT;
     var netP=tp.ing-tp.gas,ingP=tp.ing,dirP=tp.dir,indP=tp.ind;
-    var A=arrKpi(pairs),Ap=arrKpi(prev),margin=ingT>0?net/ingT*100:0,PL=periodLabel();
-    var nV=Math.max(1,state.masters.personas.length),ANV=arrNet(pairs)/nV,ANVp=arrNet(prev)/nV;
+    var netF=tF.ing-tF.gas,hayPrev=(tF.ing!==t.ing||tF.gas!==t.gas);
+    var pv=function(v){ return hayPrev?' · previsto <b class="num">'+eur(v)+'</b>':''; };
+    var A=arrKpi(pairs,true),Ap=arrKpi(prev,true),AF=arrKpi(pairs),margin=ingT>0?net/ingT*100:0,PL=periodLabel();
+    var nV=Math.max(1,state.masters.personas.length),ANV=arrNet(pairs,true)/nV,ANVp=arrNet(prev,true)/nV,ANVF=arrNet(pairs)/nV;
     $("#ivgYear").textContent=ia?(PL+" — con los ingresos y gastos actuales"):("Ejercicio "+Y+(state.quarter?" · T"+state.quarter+" resaltado":""));
     $("#donutHint").textContent="Por categoría · "+PL;
     $("#cliHint").textContent="Ingresos − directos − indirectos repartidos por facturación (sin costes de personal) · pulsa una fila para ver sus movimientos · "+PL;
     $("#budHint").textContent="Ejecución por categoría · "+PL+(state.quarter?" (anuales prorrateados)":"");
     $("#kpis").innerHTML=
-      kpi("hero","ARR neto × ViMi",eur(ANV),"ARR − costes recurrentes sin nóminas, entre "+nV+" ViMi"+(nV===1?"":"s"),delta(ANV,ANVp),"var(--brass)")+
-      kpi("hero","Resultado neto",eur(net),"Margen "+Math.round(margin)+"% · "+PL,delta(net,netP),"var(--accent)")+
-      kpi("","ARR",eur(A),"Recurrente anualizado",delta(A,Ap))+
-      kpi("","Ingresos",eur(ingT),"Facturado · "+PL,delta(ingT,ingP))+
-      kpi("","Costes directos",eur(dirT),"Ligados a cliente",delta(dirT,dirP,true))+
-      kpi("","Costes indirectos",eur(indT),"Estructura",delta(indT,indP,true));
+      kpi("hero","ARR neto × ViMi",eur(ANV),"real, sin nóminas, entre "+nV+" ViMis"+pv(ANVF),delta(ANV,ANVp),"var(--brass)")+
+      kpi("hero","Resultado neto",eur(net),"real · margen "+Math.round(margin)+"% · "+PL+pv(netF),delta(net,netP),"var(--accent)")+
+      kpi("","ARR",eur(A),"real"+pv(AF),delta(A,Ap))+
+      kpi("","Ingresos",eur(ingT),"real · "+PL+pv(tF.ing),delta(ingT,ingP))+
+      kpi("","Costes directos",eur(dirT),"real"+pv(tF.dir),delta(dirT,dirP,true))+
+      kpi("","Costes indirectos",eur(indT),"real"+pv(tF.ind),delta(indT,indP,true));
     chartLines(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs); clients(pairs); fillMovFilters(); movTable();
   }
   function kpi(cls,lab,val,sub,d,accent){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div><div class="sub">'+d+' '+sub+'</div></div>'; }
@@ -872,7 +886,7 @@
   }
 
   // ---- tabla de movimientos: filtros + multiselección ----
-  var selected={}, fltQ="", fltTipo="", fltNat="", fltCliente="", fltProveedor="", fltCat="";
+  var selected={}, fltQ="", fltTipo="", fltNat="", fltCliente="", fltProveedor="", fltCat="", fltPrev="";
   function selCount(){ return Object.keys(selected).length; }
   function visibleItems(){
     var pairs=selPairs(), q=fltQ.toLowerCase();
@@ -882,6 +896,8 @@
       if(!act) return false;
       if(fltTipo&&it.tipo!==fltTipo) return false;
       if(fltNat&&(it.tipo!=="gasto"||natDe(it)!==fltNat)) return false;
+      if(fltPrev==="real"&&it.prevision) return false;
+      if(fltPrev==="prev"&&!it.prevision) return false;
       if(fltCliente&&(it.cliente||"")!==(fltCliente==="__sin__"?"":fltCliente)) return false;
       if(fltProveedor&&(it.proveedor||"")!==fltProveedor) return false;
       if(fltCat&&it.categoria!==fltCat) return false;
@@ -914,7 +930,7 @@
         '<td class="chk"><input type="checkbox" class="rowchk" data-id="'+it.id+'"'+(selected[it.id]?" checked":"")+'></td>'+
         '<td><b>'+esc(it.concepto)+'</b>'+(who?' <span style="color:var(--ink-3)">· '+esc(who)+'</span>':'')+'</td>'+
         '<td>'+esc(it.categoria)+' '+natTag+'</td>'+
-        '<td><span class="tag '+(it.tipo==="ingreso"?"ing":"gas")+'">'+(it.tipo==="ingreso"?"Ingreso":"Gasto")+'</span></td>'+
+        '<td><span class="tag '+(it.tipo==="ingreso"?"ing":"gas")+'">'+(it.tipo==="ingreso"?"Ingreso":"Gasto")+'</span>'+(it.prevision?' <span class="tag" style="color:var(--brass);background:var(--brass-wash)">Previsión</span>':'')+'</td>'+
         '<td>'+freqTag+'</td><td class="r">'+impCell+'</td><td class="r"><b>'+eur2(annual)+'</b></td>'+
         '<td class="r"><span class="rowacts"><button class="rowact edit" data-id="'+it.id+'" title="Editar">✎</button><button class="rowact dup" data-id="'+it.id+'" title="Duplicar">⧉</button><button class="rowact del" data-id="'+it.id+'" title="Eliminar">✕</button></span></td></tr>';
     }
@@ -1012,13 +1028,13 @@
 
   function openCreate(){ editingId=null; form={tipo:"ingreso",freq:"recurrente",naturaleza:"indirecto"};
     $("#mTitle").textContent="Registrar movimiento"; $("#mDelete").classList.add("hidden");
-    resetTg("tgTipo","ingreso"); resetTg("tgFreq","recurrente"); resetTg("tgNat","indirecto"); lockNat(false);
+    resetTg("tgTipo","ingreso"); resetTg("tgFreq","recurrente"); resetTg("tgNat","indirecto"); resetTg("tgPrev",""); form.prevision=""; lockNat(false);
     $("#fImporte").value=""; $("#fImpTipo").value="eur"; $("#pctHelp").classList.add("hidden"); $("#fConcepto").value=""; $("#fCliente").value=""; $("#fProveedor").value=""; $("#fPersona").value="";
     $("#fHasta").value=""; $("#fRepeat").value="1"; fillPer(1);
     $("#fMes").value=state.year+"-01"; syncTipoUI(); syncFreqUI(); $("#scrim").classList.add("open"); setTimeout(function(){$("#fImporte").focus();},60); }
   function openEdit(id){ var it=find(id); if(!it)return; editingId=id; form={tipo:it.tipo,freq:it.freq,naturaleza:it.naturaleza||"indirecto"};
     $("#mTitle").textContent="Editar movimiento"; $("#mDelete").classList.remove("hidden");
-    resetTg("tgTipo",it.tipo); resetTg("tgFreq",it.freq); resetTg("tgNat",natDe(it)||"indirecto");
+    resetTg("tgTipo",it.tipo); resetTg("tgFreq",it.freq); resetTg("tgNat",natDe(it)||"indirecto"); resetTg("tgPrev",it.prevision?"1":""); form.prevision=it.prevision?"1":"";
     lockNat(it.tipo==="gasto"&&!!((mFind("conceptosGasto",it.concepto)||{}).naturaleza));
     $("#fImporte").value=it.pct>0?it.pct:it.importe; $("#fImpTipo").value=it.pct>0?"pct":"eur"; $("#pctHelp").classList.toggle("hidden",!(it.pct>0)); $("#fConcepto").value=it.concepto; $("#fCliente").value=it.cliente||"";
     $("#fProveedor").value=it.proveedor||""; $("#fPersona").value=it.persona||""; fillPer(it.periodicidad||1);
@@ -1032,7 +1048,7 @@
     var base={tipo:form.tipo,freq:form.freq,periodicidad:per,pct:esPct?imp:0,categoria:$("#fCategoria").value,
       concepto:($("#fConcepto").value.trim()||"(sin concepto)"),cliente:$("#fCliente").value.trim(),
       proveedor:form.tipo==="gasto"?$("#fProveedor").value.trim():"",persona:form.tipo==="gasto"?$("#fPersona").value.trim():"",
-      importe:esPct?0:imp,naturaleza:form.naturaleza};
+      importe:esPct?0:imp,naturaleza:form.naturaleza,prevision:form.prevision?1:""};
     // los valores nuevos alimentan los maestros
     addMaster("clientes",base.cliente); addMaster("proveedores",base.proveedor); addMaster("personas",base.persona);
     addMaster(base.tipo==="ingreso"?"conceptosIngreso":"conceptosGasto",base.concepto);
@@ -1058,16 +1074,17 @@
     $("#bCategoria").innerHTML=noCh+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join("");
     $("#bCliente").innerHTML=noCh+'<option value="__clear__">(quitar cliente)</option>'+mNames("clientes").map(function(c){return '<option>'+esc(c)+'</option>';}).join("");
     $("#bProveedor").innerHTML=noCh+'<option value="__clear__">(quitar proveedor)</option>'+mNames("proveedores").map(function(c){return '<option>'+esc(c)+'</option>';}).join("");
-    $("#bNat").value="";
+    $("#bNat").value=""; $("#bPrev").value="";
     $("#scrimBulk").classList.add("open");
   }
   function saveBulk(){
-    var ids=Object.keys(selected),cat=$("#bCategoria").value,cli=$("#bCliente").value,prov=$("#bProveedor").value,nat=$("#bNat").value,n=0;
+    var ids=Object.keys(selected),cat=$("#bCategoria").value,cli=$("#bCliente").value,prov=$("#bProveedor").value,nat=$("#bNat").value,prev=$("#bPrev").value,n=0;
     ids.forEach(function(id){ var it=find(id); if(!it)return; n++;
       if(cat)it.categoria=cat;
       if(cli)it.cliente=cli==="__clear__"?"":cli;
       if(prov)it.proveedor=prov==="__clear__"?"":prov;
-      if(nat&&it.tipo==="gasto")it.naturaleza=nat; });
+      if(nat&&it.tipo==="gasto")it.naturaleza=nat;
+      if(prev)it.prevision=prev==="prev"?1:""; });
     $("#scrimBulk").classList.remove("open");
     if(n){ selected={}; persist(); render(); toast(n+" movimientos actualizados"); }
   }
@@ -1213,9 +1230,9 @@
   }
 
   // ---- CSV ----
-  var CSV_HEAD=["tipo","freq","periodicidad","categoria","concepto","cliente","proveedor","persona","importe","pct","naturaleza","desde","hasta","mes"];
+  var CSV_HEAD=["tipo","freq","periodicidad","categoria","concepto","cliente","proveedor","persona","importe","pct","naturaleza","prevision","desde","hasta","mes"];
   function toCSV(){ var lines=[CSV_HEAD.join(";")];
-    state.items.forEach(function(it){ lines.push([it.tipo,it.freq,it.periodicidad||1,it.categoria,'"'+(it.concepto||"").replace(/"/g,'""')+'"',it.cliente||"",it.proveedor||"",it.persona||"",String(it.importe).replace(".",","),String(it.pct||"").replace(".",","),(it.tipo==="gasto"?natDe(it):""),it.desde||"",it.hasta||"",it.mes||""].join(";")); }); return lines.join("\n"); }
+    state.items.forEach(function(it){ lines.push([it.tipo,it.freq,it.periodicidad||1,it.categoria,'"'+(it.concepto||"").replace(/"/g,'""')+'"',it.cliente||"",it.proveedor||"",it.persona||"",String(it.importe).replace(".",","),String(it.pct||"").replace(".",","),(it.tipo==="gasto"?natDe(it):""),(it.prevision?"1":""),it.desde||"",it.hasta||"",it.mes||""].join(";")); }); return lines.join("\n"); }
   function downloadCSV(){ var blob=new Blob([toCSV()],{type:"text/csv;charset=utf-8;"}),url=URL.createObjectURL(blob),a=document.createElement("a"); a.href=url; a.download="vimi_movimientos.csv"; a.click(); URL.revokeObjectURL(url); }
   function importCSV(text){ var rows=text.split(/\r?\n/).filter(function(l){return l.trim();});
     var head=(rows.shift()||"").split(";").map(function(h){return h.trim().toLowerCase();}),added=0;
@@ -1226,7 +1243,7 @@
       if(legacy){ if(c.length<6)return;
         it={tipo:(c[0]||"").trim(),freq:(c[1]||"mensual").trim(),periodicidad:1,categoria:(c[2]||"").trim(),concepto:(c[3]||""),cliente:(c[4]||"").trim(),proveedor:"",persona:"",importe:parseFloat((c[5]||"0").replace(",",".")),naturaleza:(c[6]||"indirecto").trim(),desde:(c[7]||"").trim(),hasta:(c[8]||"").trim(),mes:(c[9]||"").trim()};
       } else {
-        it={tipo:g("tipo"),freq:g("freq","recurrente"),periodicidad:parseInt(g("periodicidad","1"),10)||1,categoria:g("categoria"),concepto:g("concepto"),cliente:g("cliente"),proveedor:g("proveedor"),persona:g("persona"),importe:parseFloat(g("importe","0").replace(",",".")),pct:parseFloat(g("pct","0").replace(",","."))||0,naturaleza:g("naturaleza","indirecto"),desde:g("desde"),hasta:g("hasta"),mes:g("mes")};
+        it={tipo:g("tipo"),freq:g("freq","recurrente"),periodicidad:parseInt(g("periodicidad","1"),10)||1,categoria:g("categoria"),concepto:g("concepto"),cliente:g("cliente"),proveedor:g("proveedor"),persona:g("persona"),importe:parseFloat(g("importe","0").replace(",",".")),pct:parseFloat(g("pct","0").replace(",","."))||0,naturaleza:g("naturaleza","indirecto"),prevision:g("prevision",""),desde:g("desde"),hasta:g("hasta"),mes:g("mes")};
       }
       it.id=uid(); it.concepto=(it.concepto||"").replace(/^"|"$/g,'').replace(/""/g,'"');
       if(it.importe>0||it.pct>0){ state.items.push(normItem(it)); added++; } });
@@ -1271,6 +1288,7 @@
   $("#scrim").addEventListener("click",function(e){ if(e.target===$("#scrim"))closeModal(); });
   tgWire("tgTipo","tipo",function(){syncTipoUI();}); tgWire("tgFreq","freq",syncFreqUI); tgWire("tgNat","naturaleza");
   $("#fImpTipo").addEventListener("change",function(){ $("#pctHelp").classList.toggle("hidden",this.value!=="pct"); });
+  tgWire("tgPrev","prevision");
   $("#fConcepto").addEventListener("change",applyConceptoDefaults);
 
   // filtros y multiselección
@@ -1280,6 +1298,7 @@
   $("#fltCliente").addEventListener("change",function(){ fltCliente=this.value; movTable(); });
   $("#fltProveedor").addEventListener("change",function(){ fltProveedor=this.value; movTable(); });
   $("#fltCat").addEventListener("change",function(){ fltCat=this.value; movTable(); });
+  $("#fltPrev").addEventListener("change",function(){ fltPrev=this.value; movTable(); });
   $("#chkAll").addEventListener("click",function(){ var on=this.checked;
     $$(".rowchk").forEach(function(c){ if(on)selected[c.dataset.id]=1; else delete selected[c.dataset.id]; }); movTable(); });
   $("#bulkDel").onclick=function(){ removeItems(Object.keys(selected)); };

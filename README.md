@@ -59,6 +59,7 @@ Cada fila es un ingreso o gasto. Columnas (iguales en la hoja *Movimientos* y en
 | `importe` | Recurrente: por periodo · Puntual: total |
 | `pct` | Gasto como **% de los ingresos del mes** (p. ej. SSCC 11%): se recalcula solo cada mes; `importe` va a 0 |
 | `naturaleza` | `directo` · `indirecto` (solo gastos) |
+| `prevision` | `1` = previsión: fuera de los KPIs «reales», dentro de los «previstos». Vacío = real |
 | `desde` / `hasta` | Recurrente: rango de meses `YYYY-MM` (`hasta` vacío = indefinido) |
 | `mes` | Puntual: mes del apunte `YYYY-MM` |
 
