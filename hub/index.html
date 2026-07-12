@@ -402,7 +402,8 @@
   function poll(){ clearTimeout(pollT); pollT=setTimeout(function(){
     if(syncUrl&&!document.hidden)pull().then(function(ch){ if(ch)renderAll(); });
     poll(); },25000); }
-  function setSub(st){ $("#wsSub").textContent=!syncUrl?"Modo local — conecta la hoja en ⚙︎":(st==="err"?"Sin conexión — trabajando en local":"Sincronizado · hoja de Google"); }
+  function setSub(st){ var fuente=/\/api$/.test(syncUrl)?"servidor del Mac":"hoja de Google";
+    $("#wsSub").textContent=!syncUrl?"Modo local — conecta la hoja en ⚙︎":(st==="err"?"Sin conexión — trabajando en local":"Sincronizado · "+fuente); }
 
   // ---------- finanzas (KPIs y objetivos) ----------
   function ymNum(ym){ return +ym.slice(0,4)*12+(+ym.slice(5,7)-1); }

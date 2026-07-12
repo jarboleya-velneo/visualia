@@ -29,10 +29,11 @@ jobs:
         uses: actions/checkout@v4
       - name: Configurar Pages
         uses: actions/configure-pages@v5
-      - name: Montar el sitio (dashboard en raíz + hub)
+      - name: Montar el sitio (dashboard en raíz + v2 + hub)
         run: |
-          mkdir -p _site/hub
+          mkdir -p _site/hub _site/v2
           cp dashboard/index.html _site/index.html
+          cp dashboard/v2/index.html _site/v2/index.html
           cp hub/index.html _site/hub/index.html
       - name: Subir el sitio
         uses: actions/upload-pages-artifact@v3
