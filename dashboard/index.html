@@ -65,6 +65,9 @@
   .kpi .val{font-size:30px;font-weight:750;letter-spacing:-.5px;margin:8px 0 4px;}
   .kpi.hero .val{font-size:40px;}
   .kpi .sub{font-size:12.5px;color:var(--ink-2);}
+  .kpi .kprev{display:inline-flex;align-items:center;gap:5px;margin:0 0 7px;padding:3px 11px;border-radius:999px;
+    background:var(--brass-wash);color:var(--brass);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .kpi.hero .kprev{font-size:14.5px;}
   .dot{width:8px;height:8px;border-radius:3px;display:inline-block;}
   .delta{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:650;padding:2px 8px;border-radius:999px;}
   .delta.up{color:var(--good-ink);background:color-mix(in srgb,var(--good) 14%,transparent);}
@@ -685,7 +688,7 @@
     var ingT=t.ing,gasT=t.gas,dirT=t.dir,indT=t.ind,net=ingT-gasT;
     var netP=tp.ing-tp.gas,ingP=tp.ing,dirP=tp.dir,indP=tp.ind;
     var netF=tF.ing-tF.gas,hayPrev=(tF.ing!==t.ing||tF.gas!==t.gas);
-    var pv=function(v){ return hayPrev?' · previsto <b class="num">'+eur(v)+'</b>':''; };
+    var pv=function(v){ return hayPrev?eur(v):""; };
     var A=arrKpi(pairs,true),Ap=arrKpi(prev,true),AF=arrKpi(pairs),margin=ingT>0?net/ingT*100:0,PL=periodLabel();
     var nV=Math.max(1,state.masters.personas.length),ANV=arrNet(pairs,true)/nV,ANVp=arrNet(prev,true)/nV,ANVF=arrNet(pairs)/nV;
     $("#ivgYear").textContent=ia?(PL+" — con los ingresos y gastos actuales"):("Ejercicio "+Y+(state.quarter?" · T"+state.quarter+" resaltado":""));
@@ -693,15 +696,15 @@
     $("#cliHint").textContent="Ingresos − directos − indirectos repartidos por facturación (sin costes de personal) · pulsa una fila para ver sus movimientos · "+PL;
     $("#budHint").textContent="Ejecución por categoría · "+PL+(state.quarter?" (anuales prorrateados)":"");
     $("#kpis").innerHTML=
-      kpi("hero","ARR neto × ViMi",eur(ANV),"real, sin nóminas, entre "+nV+" ViMis"+pv(ANVF),delta(ANV,ANVp),"var(--brass)")+
-      kpi("hero","Resultado neto",eur(net),"real · margen "+Math.round(margin)+"% · "+PL+pv(netF),delta(net,netP),"var(--accent)")+
-      kpi("","ARR",eur(A),"real"+pv(AF),delta(A,Ap))+
-      kpi("","Ingresos",eur(ingT),"real · "+PL+pv(tF.ing),delta(ingT,ingP))+
-      kpi("","Costes directos",eur(dirT),"real"+pv(tF.dir),delta(dirT,dirP,true))+
-      kpi("","Costes indirectos",eur(indT),"real"+pv(tF.ind),delta(indT,indP,true));
+      kpi("hero","ARR neto × ViMi",eur(ANV),"real, sin nóminas, entre "+nV+" ViMis",delta(ANV,ANVp),"var(--brass)",pv(ANVF))+
+      kpi("hero","Resultado neto",eur(net),"real · margen "+Math.round(margin)+"% · "+PL,delta(net,netP),"var(--accent)",pv(netF))+
+      kpi("","ARR",eur(A),"real",delta(A,Ap),"",pv(AF))+
+      kpi("","Ingresos",eur(ingT),"real · "+PL,delta(ingT,ingP),"",pv(tF.ing))+
+      kpi("","Costes directos",eur(dirT),"real",delta(dirT,dirP,true),"",pv(tF.dir))+
+      kpi("","Costes indirectos",eur(indT),"real",delta(indT,indP,true),"",pv(tF.ind));
     chartLines(s,chartPairs); donut(catTotals(pairs)); chartNet(s,chartPairs); budget(pairs); conceptos(pairs); clients(pairs); fillMovFilters(); movTable();
   }
-  function kpi(cls,lab,val,sub,d,accent){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div><div class="sub">'+d+' '+sub+'</div></div>'; }
+  function kpi(cls,lab,val,sub,d,accent,prev){ return '<div class="card kpi '+cls+'"><div class="lab">'+lab+'</div><div class="val"'+(accent?' style="color:'+accent+'"':'')+'>'+val+'</div>'+(prev?'<div class="kprev">previsto '+prev+'</div>':'')+'<div class="sub">'+d+' '+sub+'</div></div>'; }
   function delta(cur,prev,inv){ if(!prev)return '<span class="delta flat">nuevo</span>'; var ch=(cur-prev)/Math.abs(prev)*100,up=ch>=0,good=inv?!up:up,cls=Math.abs(ch)<0.5?"flat":(good?"up":"down"),ar=Math.abs(ch)<0.5?"→":(up?"▲":"▼"); return '<span class="delta '+cls+'">'+ar+' '+pctf(ch)+'</span>'; }
 
   function pairLab(p,i){ return MONTHS[p.m]+((p.m===0||i===0)&&state.quarter==="ia"?" ’"+String(p.Y).slice(2):""); }
