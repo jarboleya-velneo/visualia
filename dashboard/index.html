@@ -799,13 +799,20 @@
     return ""; }
   function budget(pairs){
     chartBud(pairs);
-    var real=catTotals(pairs),inc=incTotals(pairs),tot=totalsPairs(pairs);
+    var real=catTotals(pairs),inc=incTotals(pairs);
+    // Para las filas comodín (dir/ind por naturaleza) se excluyen las categorías de
+    // personal (nóminas, SSCC…): tienen su propia fila y presupuesto, y contarlas
+    // aquí las duplicaría contra un presupuesto que no las contempla.
+    var natNP={dir:0,ind:0};
+    state.items.forEach(function(it){ if(it.tipo!=="gasto"||esPersonal(it.categoria))return;
+      var v=sumPairs(it,pairs); if(!v)return;
+      if(natDe(it)==="directo")natNP.dir+=v; else natNP.ind+=v; });
     var html="",hay=false;
     [["Ingresos · objetivo","categoriasIngreso",inc,true],["Gastos · límite","categoriasGasto",real,false]].forEach(function(sec){
       var rows=mNames(sec[1]).map(function(k){
           var r=sec[2][k]||0,especial=sec[3]?"":natCatEspecial(k);
-          if(especial==="dir")r=tot.dir; else if(especial==="ind")r=tot.ind;
-          return {k:k+(especial?" · por naturaleza":""),real:r,bud:budForPairs(k,pairs),good:sec[3]}; })
+          if(especial==="dir")r=natNP.dir; else if(especial==="ind")r=natNP.ind;
+          return {k:k+(especial?" · por naturaleza (sin personal)":""),real:r,bud:budForPairs(k,pairs),good:sec[3]}; })
         .filter(function(r){return r.real||r.bud;});
       if(!rows.length)return; hay=true;
       html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin:12px 0 10px">'+sec[0]+'</div>';
