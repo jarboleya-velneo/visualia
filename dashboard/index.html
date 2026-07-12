@@ -611,13 +611,14 @@
   }
 
   // ---- computation ----
-  function ingresosMes(Y,mIdx){ var t=0;
-    state.items.forEach(function(it){ if(it.tipo==="ingreso")t+=inRange(it,Y,mIdx); }); return t; }
-  function inRange(it,Y,mIdx){
+  function ingresosMes(Y,mIdx,soloReal){ var t=0;
+    state.items.forEach(function(it){ if(it.tipo!=="ingreso")return; if(soloReal&&it.prevision)return; t+=inRange(it,Y,mIdx,soloReal); }); return t; }
+  function inRange(it,Y,mIdx,soloReal){
     var cur=Y*12+mIdx;
-    // gasto definido como % de los ingresos del mes (p. ej. SSCC 11%)
+    // gasto definido como % de los ingresos del mes (p. ej. SSCC 11%):
+    // en la vista "real" se calcula sobre los ingresos reales; en la prevista, sobre todos
     var base=it.pct>0?null:it.importe;
-    var val=function(){ return base!=null?base:ingresosMes(Y,mIdx)*it.pct/100; };
+    var val=function(){ return base!=null?base:ingresosMes(Y,mIdx,soloReal)*it.pct/100; };
     if(it.freq==="puntual"){ if(!it.mes) return 0; return ymNum(it.mes)===cur?val():0; }
     if(!it.desde) return 0;
     var start=ymNum(it.desde), end=it.hasta?ymNum(it.hasta):Infinity;
@@ -645,26 +646,26 @@
     if(q==="ia"){ var pr=selPairs(),a=pr[0],z=pr[pr.length-1];
       return "Interanual · "+MONTHS[a.m]+" "+a.Y+" → "+MONTHS[z.m]+" "+z.Y; }
     return q?("T"+q+" "+state.year):("Ejercicio "+state.year); }
-  function sumPairs(it,pairs){ var t=0; pairs.forEach(function(p){t+=inRange(it,p.Y,p.m);}); return t; }
+  function sumPairs(it,pairs,soloReal){ var t=0; pairs.forEach(function(p){t+=inRange(it,p.Y,p.m,soloReal);}); return t; }
   function seriesPairs(pairs){ var n=pairs.length,ing=Array(n).fill(0),gas=Array(n).fill(0);
     state.items.forEach(function(it){ pairs.forEach(function(p,i){ var a=inRange(it,p.Y,p.m); if(!a)return;
       if(it.tipo==="ingreso")ing[i]+=a; else gas[i]+=a; }); });
     return {ing:ing,gas:gas}; }
   function totalsPairs(pairs,soloReal){ var ing=0,gas=0,dir=0,ind=0;
-    state.items.forEach(function(it){ if(soloReal&&it.prevision)return; var v=sumPairs(it,pairs); if(!v)return;
+    state.items.forEach(function(it){ if(soloReal&&it.prevision)return; var v=sumPairs(it,pairs,soloReal); if(!v)return;
       if(it.tipo==="ingreso")ing+=v; else{gas+=v; if(natDe(it)==="directo")dir+=v; else ind+=v;} });
     return {ing:ing,gas:gas,dir:dir,ind:ind}; }
-  function arr12(it){
-    if(it.pct>0){ var now=new Date(); return ingresosMes(now.getFullYear(),now.getMonth())*it.pct/100*12/(it.periodicidad||1); }
+  function arr12(it,soloReal){
+    if(it.pct>0){ var now=new Date(); return ingresosMes(now.getFullYear(),now.getMonth(),soloReal)*it.pct/100*12/(it.periodicidad||1); }
     return it.importe*12/(it.periodicidad||1); }
   function arrKpi(pairs,soloReal){ var last=pairs[pairs.length-1],t=0;
-    state.items.forEach(function(it){ if(soloReal&&it.prevision)return; if(it.tipo==="ingreso"&&activeAt(it,last.Y,last.m)) t+=arr12(it); }); return t; }
+    state.items.forEach(function(it){ if(soloReal&&it.prevision)return; if(it.tipo==="ingreso"&&activeAt(it,last.Y,last.m)) t+=arr12(it,soloReal); }); return t; }
   function esPersonal(cat){ var rec=mFind("categoriasGasto",cat); return !!(rec&&rec.personal==="si"); }
   function arrNet(pairs,soloReal){ // ARR de ingresos menos costes recurrentes activos (sin nóminas/personal), anualizado
     var last=pairs[pairs.length-1],t=0;
     state.items.forEach(function(it){ if(soloReal&&it.prevision)return; if(!activeAt(it,last.Y,last.m))return;
       if(it.tipo==="gasto"&&esPersonal(it.categoria))return;
-      t+=(it.tipo==="ingreso"?1:-1)*arr12(it); }); return t; }
+      t+=(it.tipo==="ingreso"?1:-1)*arr12(it,soloReal); }); return t; }
   function catTotals(pairs){ var t={}; state.items.forEach(function(it){ if(it.tipo!=="gasto")return; var s=sumPairs(it,pairs); if(s)t[it.categoria]=(t[it.categoria]||0)+s; }); return t; }
   function incTotals(pairs){ var t={}; state.items.forEach(function(it){ if(it.tipo!=="ingreso")return; var s=sumPairs(it,pairs); if(s)t[it.categoria]=(t[it.categoria]||0)+s; }); return t; }
   function clientTotals(pairs){
