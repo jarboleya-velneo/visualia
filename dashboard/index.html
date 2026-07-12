@@ -931,6 +931,7 @@
       if(!act) return false;
       if(fltTipo&&it.tipo!==fltTipo) return false;
       if(fltNat&&(it.tipo!=="gasto"||natDe(it)!==fltNat)) return false;
+      if(vistaReal()&&it.prevision) return false; // la vista global Real oculta previsiones
       if(fltPrev==="real"&&it.prevision) return false;
       if(fltPrev==="prev"&&!it.prevision) return false;
       if(fltCliente&&(it.cliente||"")!==(fltCliente==="__sin__"?"":fltCliente)) return false;
@@ -941,6 +942,7 @@
     });
   }
   function fillMovFilters(){
+    $("#fltPrev").style.display=vistaReal()?"none":""; // en vista Real no hay previsiones que filtrar
     var opt=function(v,l,sel){return '<option value="'+esc(v)+'"'+(v===sel?" selected":"")+'>'+esc(l)+'</option>';};
     var setSel=function(id,primero,vals,sel,extra){
       var el=$(id),h=opt("",primero,sel)+(extra||"");
