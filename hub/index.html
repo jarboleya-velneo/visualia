@@ -360,6 +360,11 @@
     return {canales:canales,mensajes:mensajes,tareas:tareas,fin:null};
   }
   var syncUrl=localStorage.getItem(LS_URL)||"";
+  // Conexión por enlace: …/#hoja=https://script.google.com/…/exec (el fragmento no viaja al servidor)
+  (function(){ var m=/[#&]hoja=([^&]+)/.exec(location.hash); if(!m) return;
+    var u=decodeURIComponent(m[1]);
+    if(/^https:\/\/script\.google\.com\/.+\/exec$/.test(u)){ syncUrl=u; localStorage.setItem(LS_URL,u); }
+    history.replaceState(null,"",location.pathname+location.search); })();
   // Servido desde el Mac en red local: usa su API (/api) como fuente de verdad sin configurar nada
   if(!syncUrl && /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname)) syncUrl=location.origin+"/api";
   var yo=localStorage.getItem(LS_ME)||"";
