@@ -280,7 +280,7 @@
   <div class="grid2b" id="sec-presupuesto">
     <div class="card panel"><h2>Resultado neto acumulado</h2><p class="hint">Ingresos − costes directos − indirectos, mes a mes</p><div id="chartNet"></div></div>
     <div class="card panel">
-      <div class="phead"><div><h2>Presupuesto vs. real</h2><p class="hint" id="budHint">Ejecución del ejercicio por categoría</p></div>
+      <div class="phead"><div><h2>Presupuesto vs. ejecución</h2><p class="hint" id="budHint">Ejecución del ejercicio por categoría</p></div>
         <button class="btn primary" id="budEditBtn">✎ Editar presupuesto</button></div>
       <div id="chartBud"></div>
       <div class="legend" style="margin-bottom:12px"><span><i class="dot" style="background:var(--income)"></i> Ingresos (según vista)</span><span><i class="dot" style="background:var(--expense)"></i> Gastos (según vista)</span><span><i class="dot" style="background:var(--income);height:3px;border-radius:2px;width:14px"></i> Ppto. ingresos</span><span><i class="dot" style="background:var(--expense);height:3px;border-radius:2px;width:14px"></i> Ppto. gastos</span></div>
@@ -748,7 +748,7 @@
     $("#ivgYear").textContent=ia?(PL+" — con los ingresos y gastos actuales"):("Ejercicio "+Y+(state.quarter?" · T"+state.quarter+" resaltado":""));
     $("#donutHint").textContent="Por categoría · "+PL;
     $("#cliHint").textContent="Ingresos − directos − indirectos repartidos por facturación (sin costes de personal) · pulsa una fila para ver sus movimientos · "+PL;
-    $("#budHint").textContent="Ejecución por categoría · "+PL+(state.quarter?" (anuales prorrateados)":"");
+    $("#budHint").textContent="Ejecución "+(sr?"real":"con previsión")+" por categoría · "+PL+(state.quarter?" (anuales prorrateados)":"");
     $("#kpis").innerHTML=
       kpi("hero","ARR neto × ViMi",eur(ANV),lbl+", sin nóminas, entre "+nV+" ViMis",delta(ANV,ANVp),"var(--brass)",pv(ANVF))+
       kpi("hero","Resultado neto",eur(net),lbl+" · margen "+Math.round(margin)+"% · "+PL,delta(net,netP),"var(--accent)",pv(netF))+
@@ -849,34 +849,31 @@
     return ""; }
   function budget(pairs){
     chartBud(pairs);
-    // real = solo apuntes reales; prev = real + previsiones (mismo criterio que los KPIs)
-    var prev=catTotals(pairs),inc=incTotals(pairs);
-    var realR=catTotals(pairs,true),incR=incTotals(pairs,true);
+    // La vista global decide qué se compara con el presupuesto:
+    // Real = solo apuntes reales; Previsión = reales + previsiones (como los KPIs)
+    var sr=vistaReal();
+    var real=catTotals(pairs,sr),inc=incTotals(pairs,sr);
     // Para las filas comodín (dir/ind por naturaleza) se excluyen las categorías de
     // personal (nóminas, SSCC…): tienen su propia fila y presupuesto, y contarlas
     // aquí las duplicaría contra un presupuesto que no las contempla.
-    var natNP={dir:0,ind:0},natNPR={dir:0,ind:0};
+    var natNP={dir:0,ind:0};
     state.items.forEach(function(it){ if(it.tipo!=="gasto"||esPersonal(it.categoria))return;
-      var v=sumPairs(it,pairs); if(v){ if(natDe(it)==="directo")natNP.dir+=v; else natNP.ind+=v; }
-      if(it.prevision)return;
-      var vr=sumPairs(it,pairs,true); if(vr){ if(natDe(it)==="directo")natNPR.dir+=vr; else natNPR.ind+=vr; } });
+      if(sr&&it.prevision)return;
+      var v=sumPairs(it,pairs,sr); if(!v)return;
+      if(natDe(it)==="directo")natNP.dir+=v; else natNP.ind+=v; });
     var html="",hay=false;
-    [["Ingresos · objetivo","categoriasIngreso",inc,incR,true],["Gastos · límite","categoriasGasto",prev,realR,false]].forEach(function(sec){
+    [["Ingresos · objetivo","categoriasIngreso",inc,true],["Gastos · límite","categoriasGasto",real,false]].forEach(function(sec){
       var rows=mNames(sec[1]).map(function(k){
-          var p=sec[2][k]||0,rr=sec[3][k]||0,especial=sec[4]?"":natCatEspecial(k);
-          if(especial==="dir"){p=natNP.dir;rr=natNPR.dir;} else if(especial==="ind"){p=natNP.ind;rr=natNPR.ind;}
-          return {k:k+(especial?" · por naturaleza (sin personal)":""),real:rr,prev:p,bud:budForPairs(k,pairs),good:sec[4]}; })
-        .filter(function(r){return r.real||r.prev||r.bud;});
+          var r=sec[2][k]||0,especial=sec[3]?"":natCatEspecial(k);
+          if(especial==="dir")r=natNP.dir; else if(especial==="ind")r=natNP.ind;
+          return {k:k+(especial?" · por naturaleza (sin personal)":""),real:r,bud:budForPairs(k,pairs),good:sec[3]}; })
+        .filter(function(r){return r.real||r.bud;});
       if(!rows.length)return; hay=true;
       html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin:12px 0 10px">'+sec[0]+'</div>';
-      html+=rows.map(function(r){ var bud=r.bud,frac=bud>0?r.real/bud:0,fracP=bud>0?r.prev/bud:0,over=frac>1;
-        var hayP=Math.round(r.prev)!==Math.round(r.real);
-        var color=r.good?(frac>=1?"var(--good)":"var(--accent)"):(over?"var(--crit)":(frac>0.9?"var(--warn)":"var(--s1)"));
+      html+=rows.map(function(r){ var bud=r.bud,frac=bud>0?r.real/bud:0,over=frac>1;
+        var color=r.good?(frac>=1?"var(--good)":"var(--accent)"):(over?"var(--crit)":(frac>0.9?"var(--warn)":"var(--s1)")),w=Math.min(100,frac*100);
         var badge=bud<=0?'<span class="delta flat">sin ppto.</span>':(r.good?(frac>=1?'<span class="delta up">✓ objetivo</span>':'<span class="delta flat">'+Math.round(frac*100)+'%</span>'):(over?'<span class="delta down">↑ '+Math.round((frac-1)*100)+'% sobre</span>':'<span class="delta flat">'+Math.round(frac*100)+'%</span>'));
-        var badgeP=(hayP&&bud>0)?(' '+(r.good?(fracP>=1?'<span class="delta up">prev. '+Math.round(fracP*100)+'%</span>':'<span class="delta flat">prev. '+Math.round(fracP*100)+'%</span>'):(fracP>1?'<span class="delta down">prev. ↑ '+Math.round((fracP-1)*100)+'% sobre</span>':'<span class="delta flat">prev. '+Math.round(fracP*100)+'%</span>'))):"";
-        var w1=Math.min(100,frac*100),w2=Math.max(0,Math.min(100,fracP*100)-w1);
-        var amt=eur(r.real)+(hayP?' <span style="color:var(--brass)">· prev. '+eur(r.prev)+'</span>':'')+' / '+eur(bud);
-        return '<div class="budrow"><span class="cat">'+esc(r.k)+'</span><span class="amt num">'+amt+' '+badge+badgeP+'</span><div class="track"><i style="width:'+w1+'%;background:'+color+'"></i><i style="width:'+w2+'%;background:'+color+';opacity:.35"></i></div></div>';
+        return '<div class="budrow"><span class="cat">'+esc(r.k)+'</span><span class="amt num">'+eur(r.real)+' / '+eur(bud)+' '+badge+'</span><div class="track"><i style="width:'+w+'%;background:'+color+'"></i></div></div>';
       }).join("");
     });
     $("#budget").innerHTML=hay?html:'<p class="hint">Define presupuestos (✎ Editar presupuesto) para ver la ejecución por tipo.</p>';
