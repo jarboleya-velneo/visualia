@@ -370,19 +370,23 @@
     </div>
     <div class="frow">
       <div class="field"><label>Concepto</label>
-        <input id="fConcepto" type="text" list="dlConcepto" placeholder="Selecciona o escribe…"><datalist id="dlConcepto"></datalist></div>
+        <select id="fConceptoSel"></select>
+        <input id="fConcepto" type="text" placeholder="Nombre del concepto nuevo…" class="hidden" style="margin-top:8px"></div>
       <div class="field"><label>Categoría</label><select id="fCategoria"></select></div>
     </div>
     <div class="frow">
       <div class="field" id="fldCliente"><label>Cliente <span style="color:var(--ink-3)">(opcional)</span></label>
-        <input id="fCliente" type="text" list="dlCliente" placeholder="—"><datalist id="dlCliente"></datalist></div>
+        <select id="fClienteSel"></select>
+        <input id="fCliente" type="text" placeholder="Nombre del cliente nuevo…" class="hidden" style="margin-top:8px"></div>
       <div class="field" id="fldMes"><label id="lblMes">Mes</label><input id="fMes" type="month"></div>
     </div>
     <div class="frow hidden" id="fldGasto">
       <div class="field"><label>Proveedor <span style="color:var(--ink-3)">(opcional)</span></label>
-        <input id="fProveedor" type="text" list="dlProveedor" placeholder="—"><datalist id="dlProveedor"></datalist></div>
+        <select id="fProveedorSel"></select>
+        <input id="fProveedor" type="text" placeholder="Nombre del proveedor nuevo…" class="hidden" style="margin-top:8px"></div>
       <div class="field"><label>Persona / ViMi <span style="color:var(--ink-3)">(opcional)</span></label>
-        <input id="fPersona" type="text" list="dlPersona" placeholder="—"><datalist id="dlPersona"></datalist></div>
+        <select id="fPersonaSel"></select>
+        <input id="fPersona" type="text" placeholder="Nombre nuevo…" class="hidden" style="margin-top:8px"></div>
     </div>
     <!-- recurrente: fin opcional -->
     <div class="field hidden" id="fldHasta">
@@ -1066,10 +1070,35 @@
   var form={tipo:"ingreso",freq:"recurrente",naturaleza:"indirecto"}, editingId=null;
   function catsFor(tipo){ return mNames(tipo==="ingreso"?"categoriasIngreso":"categoriasGasto"); }
   function fillCats(sel){ var el=$("#fCategoria"); el.innerHTML=catsFor(form.tipo).map(function(c){return '<option'+(c===sel?" selected":"")+'>'+esc(c)+'</option>';}).join(""); if(sel&&catsFor(form.tipo).indexOf(sel)<0)el.innerHTML+='<option selected>'+esc(sel)+'</option>'; }
+  // Combos de maestros: select nativo (funciona en iOS, donde los datalist no) con
+  // opción «+ Nuevo…» que muestra el campo de texto; el valor vive en el input
+  // oculto, así el resto del código sigue leyendo $("#fX").value como siempre.
+  function combo(selId,inputId,key,opcional,alCambiar){
+    var sel=$(selId),inp=$(inputId),names=mNames(key),cur=inp.value;
+    var h='<option value="">'+(opcional?"—":"Selecciona…")+'</option>';
+    names.forEach(function(n){ h+='<option value="'+esc(n)+'"'+(n===cur?" selected":"")+'>'+esc(n)+'</option>'; });
+    h+='<option value="__nuevo__">＋ Nuevo…</option>';
+    sel.innerHTML=h;
+    var esNuevo=!!cur&&names.indexOf(cur)<0;
+    if(esNuevo)sel.value="__nuevo__";
+    inp.classList.toggle("hidden",!esNuevo);
+    sel.onchange=function(){
+      if(sel.value==="__nuevo__"){ inp.value=""; inp.classList.remove("hidden"); inp.focus(); }
+      else { inp.value=sel.value; inp.classList.add("hidden"); }
+      if(alCambiar)alCambiar();
+    };
+  }
+  function comboSet(selId,inputId,v){ // fija un valor y sincroniza el select
+    $(inputId).value=v; var sel=$(selId); sel.value=v;
+    var enLista=sel.value===v;
+    if(!enLista)sel.value="__nuevo__";
+    $(inputId).classList.toggle("hidden",enLista);
+  }
   function fillDatalists(){
-    var dl=function(id,key){ $(id).innerHTML=mNames(key).map(function(v){return '<option value="'+esc(v)+'">';}).join(""); };
-    dl("#dlConcepto",form.tipo==="ingreso"?"conceptosIngreso":"conceptosGasto");
-    dl("#dlCliente","clientes"); dl("#dlProveedor","proveedores"); dl("#dlPersona","personas");
+    combo("#fConceptoSel","#fConcepto",form.tipo==="ingreso"?"conceptosIngreso":"conceptosGasto",false,applyConceptoDefaults);
+    combo("#fClienteSel","#fCliente","clientes",true);
+    combo("#fProveedorSel","#fProveedor","proveedores",true);
+    combo("#fPersonaSel","#fPersona","personas",true);
   }
   function fillPer(sel){ $("#fPer").innerHTML=PERS.map(function(p){return '<option value="'+p[0]+'"'+(p[0]===sel?" selected":"")+'>'+p[1]+'</option>';}).join(""); }
   function tgWire(id,key,onchange){ $$("#"+id+" button").forEach(function(b){ b.onclick=function(){ $$("#"+id+" button").forEach(function(x){x.setAttribute("aria-pressed","false");}); b.setAttribute("aria-pressed","true"); form[key]=b.dataset.v; if(onchange)onchange(); }; }); }
@@ -1093,7 +1122,7 @@
     if(rec.categoria) fillCats(rec.categoria);
     if(form.tipo==="gasto"){
       if(rec.naturaleza){ form.naturaleza=rec.naturaleza; resetTg("tgNat",rec.naturaleza); }
-      if(rec.proveedor&&!$("#fProveedor").value) $("#fProveedor").value=rec.proveedor;
+      if(rec.proveedor&&!$("#fProveedor").value) comboSet("#fProveedorSel","#fProveedor",rec.proveedor);
     }
   }
 
