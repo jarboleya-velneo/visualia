@@ -360,6 +360,8 @@
     return {canales:canales,mensajes:mensajes,tareas:tareas,fin:null};
   }
   var syncUrl=localStorage.getItem(LS_URL)||"";
+  // Servido desde el Mac en red local: usa su API (/api) como fuente de verdad sin configurar nada
+  if(!syncUrl && /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname)) syncUrl=location.origin+"/api";
   var yo=localStorage.getItem(LS_ME)||"";
   var leidos={}; try{ leidos=JSON.parse(localStorage.getItem(LS_READ))||{}; }catch(e){}
   var state=loadLocal(), canalActivo="general";
