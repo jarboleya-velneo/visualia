@@ -446,6 +446,8 @@
     <div class="modal-actions" style="flex-direction:column">
       <button class="btn" id="expBtn">⬇ Exportar CSV</button>
       <label class="btn" style="text-align:center;display:block">⬆ Importar CSV<input id="impFile" type="file" accept=".csv" class="hidden"></label>
+      <button class="btn" id="expJsonBtn">⬇ Copia completa (JSON): movimientos + presupuesto + maestros</button>
+      <label class="btn" style="text-align:center;display:block">⬆ Restaurar copia completa (JSON)<input id="impJsonFile" type="file" accept=".json" class="hidden"></label>
       <button class="btn" id="seedBtn">↺ Restaurar datos de ejemplo</button>
       <button class="btn ghost" id="wipeBtn" style="color:var(--crit)">🗑 Vaciar todo</button>
       <button class="btn ghost" id="mCancel2">Cerrar</button>
@@ -1255,6 +1257,20 @@
       if(it.importe>0||it.pct>0){ state.items.push(normItem(it)); added++; } });
     harvestMasters(); persist(); render(); toast(added+" líneas importadas"); }
 
+  // ---- copia completa (JSON): movimientos + presupuesto + maestros ----
+  function downloadJSON(){ var d={items:state.items,budget:state.budget,masters:state.masters};
+    var blob=new Blob([JSON.stringify(d,null,1)],{type:"application/json;charset=utf-8;"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url; a.download="vimi_copia_completa.json"; a.click(); URL.revokeObjectURL(url); }
+  function importJSON(text){
+    var d; try{ d=JSON.parse(text); }catch(e){ toast("El archivo no es un JSON válido"); return; }
+    if(!d||!d.items){ toast("El archivo no parece una copia del dashboard"); return; }
+    if(!confirm("Esto sustituye TODOS los datos actuales por los de la copia ("+d.items.length+" movimientos). ¿Continuar?")) return;
+    state.items=(d.items||[]).map(normItem);
+    state.budget=normBudget(d.budget||{});
+    state.masters=normMasters(d.masters||{});
+    harvestMasters(); persist(); buildYears(); buildQuarters(); render();
+    toast("Copia restaurada: "+state.items.length+" movimientos"); }
+
   // ---- sync UI ----
   function setSync(st){ var d=$("#syncDot"),b=$("#bannerTxt");
     if(!syncUrl){ d.className="syncdot"; b.innerHTML='<b>Modo local.</b> Datos en este dispositivo. Conecta la hoja de Google (⋯) para compartir con Bea. Cifras iniciales de ejemplo.'; return; }
@@ -1332,6 +1348,8 @@
   $("#scrim2").addEventListener("click",function(e){ if(e.target===$("#scrim2"))$("#scrim2").classList.remove("open"); });
   $("#expBtn").onclick=downloadCSV;
   $("#impFile").onchange=function(e){ var f=e.target.files[0]; if(!f)return; var r=new FileReader(); r.onload=function(){ importCSV(r.result); $("#scrim2").classList.remove("open"); }; r.readAsText(f); };
+  $("#expJsonBtn").onclick=downloadJSON;
+  $("#impJsonFile").onchange=function(e){ var f=e.target.files[0]; if(!f)return; var r=new FileReader(); r.onload=function(){ importJSON(r.result); $("#scrim2").classList.remove("open"); }; r.readAsText(f); e.target.value=""; };
   $("#seedBtn").onclick=function(){ if(confirm("¿Restaurar los datos de ejemplo? Se perderá lo introducido.")){ state=seed(); persist(); buildYears(); buildQuarters(); render(); $("#scrim2").classList.remove("open"); toast("Datos de ejemplo restaurados"); } };
   $("#wipeBtn").onclick=function(){ if(confirm("¿Vaciar todos los movimientos?")){ state.items=[]; selected={}; persist(); render(); $("#scrim2").classList.remove("open"); toast("Vaciado"); } };
   $("#syncConnect").onclick=function(){ var u=$("#syncUrl").value.trim(); if(!/^https:\/\/script\.google\.com\/.*\/exec$/.test(u)){ if(!confirm("La URL no parece un Apps Script /exec. ¿Conectar igualmente?"))return; } syncUrl=u; localStorage.setItem(LS_URL,u); $("#scrim2").classList.remove("open"); pullSheet().then(function(){ buildYears(); buildQuarters(); render(); toast("Conectado a la hoja"); }); };
