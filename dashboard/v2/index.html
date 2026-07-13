@@ -249,16 +249,10 @@
       <button data-v="real" aria-pressed="true">Real</button>
       <button data-v="prev" aria-pressed="false">Previsión</button>
     </div>
-    <a class="btn" id="hubLink" href="../../hub/" style="height:38px;display:inline-flex;align-items:center;text-decoration:none" title="ViMi Hub — equipo y tareas">💬 Hub</a>
     <button class="btn" id="mastersBtn" style="height:38px" aria-label="Maestros">Maestros</button>
     <button class="icon-btn" id="themeBtn" title="Cambiar tema" aria-label="Cambiar tema">◐</button>
     <button class="icon-btn" id="menuBtn" title="Datos y sincronización" aria-label="Datos">⋯</button>
   </header>
-
-  <div class="banner">
-    <span class="syncdot" id="syncDot"></span>
-    <div id="bannerTxt"></div>
-  </div>
 
   <nav class="secnav" aria-label="Secciones"><a href="#kpis">Resumen</a><a href="#sec-analisis">Análisis</a><a href="#sec-presupuesto">Presupuesto</a><a href="#sec-conceptos">Conceptos</a><a href="#sec-clientes">Clientes</a><a href="#sec-movimientos">Movimientos</a></nav>
 
@@ -296,6 +290,7 @@
         <tbody id="conBody"></tbody>
       </table>
     </div>
+    <div id="chartCon" style="margin-top:14px"></div>
   </div>
 
   <div class="card panel" id="sec-clientes" style="margin-bottom:16px">
@@ -306,6 +301,7 @@
         <tbody id="cliBody"></tbody>
       </table>
     </div>
+    <div id="chartCli" style="margin-top:14px"></div>
   </div>
 
   <div class="card panel" id="sec-movimientos">
@@ -902,7 +898,7 @@
   function conceptos(pairs){
     var by=conceptTotals(pairs),keys=Object.keys(by).sort(function(a,b){return by[b].total-by[a].total;});
     $("#conHint").textContent="Cuánto cuesta cada cosa · pulsa un concepto para ver su detalle por cliente · "+periodLabel();
-    if(!keys.length){ $("#conBody").innerHTML='<tr><td colspan="6" style="color:var(--ink-3)">Sin gastos en el periodo.</td></tr>'; return; }
+    if(!keys.length){ $("#conBody").innerHTML='<tr><td colspan="6" style="color:var(--ink-3)">Sin gastos en el periodo.</td></tr>'; $("#chartCon").innerHTML=""; return; }
     var tot=0; keys.forEach(function(k){tot+=by[k].total;});
     $("#conBody").innerHTML=keys.map(function(k){ var o=by[k],p=tot>0?o.total/tot*100:0,abierto=!!conAbiertos[k];
       var natTag=o.nat==="directo"?'<span class="tag dir">Directo'+(o.cliente?" · "+esc(o.cliente):"")+'</span>':'<span class="tag ind">Indirecto</span>';
@@ -914,6 +910,13 @@
       }
       return html;
     }).join("")+'<tr style="border-top:2px solid var(--line-strong)"><td><b>Total</b></td><td></td><td></td><td></td><td class="r"><b>'+eur2(tot)+'</b></td><td class="r"><b>100%</b></td></tr>';
+    // Gráfico: barras horizontales por concepto, color según naturaleza
+    var maxT=by[keys[0]].total||1;
+    $("#chartCon").innerHTML=keys.map(function(k){ var o=by[k],w=Math.max(1,o.total/maxT*100),p=tot>0?o.total/tot*100:0;
+      return '<div class="hbar"><span class="hlab">'+esc(k)+'</span>'+
+        '<div class="htrack"><i style="width:'+w+'%;background:'+(o.nat==="directo"?"var(--s4)":"var(--s1)")+'"></i></div>'+
+        '<span class="hval num">'+eur(o.total)+' <span style="color:var(--ink-3);font-weight:600">'+(Math.round(p*10)/10).toLocaleString("es-ES")+'%</span></span></div>'; }).join("")+
+      '<div class="legend" style="margin-top:8px"><span><i class="dot" style="background:var(--s4)"></i> Directo</span><span><i class="dot" style="background:var(--s1)"></i> Indirecto</span></div>';
     $$("#conBody .conrow").forEach(function(tr){ tr.addEventListener("click",function(){
       var k=tr.dataset.k; if(conAbiertos[k])delete conAbiertos[k]; else conAbiertos[k]=1; conceptos(selPairs()); }); });
   }
@@ -941,7 +944,7 @@
   function clients(pairs){
     var d=clientTotals(pairs),names=Object.keys(d.by);
     names.sort(function(a,b){return d.by[b].ing-d.by[a].ing;});
-    if(!names.length){ $("#cliBody").innerHTML='<tr><td colspan="6" style="color:var(--ink-3)">Sin actividad por cliente en el periodo.</td></tr>'; return; }
+    if(!names.length){ $("#cliBody").innerHTML='<tr><td colspan="6" style="color:var(--ink-3)">Sin actividad por cliente en el periodo.</td></tr>'; $("#chartCli").innerHTML=""; return; }
     var html=names.map(function(k){ var c=d.by[k],share=d.ingTot>0?d.ind*(c.ing/d.ingTot):0,net=c.ing-c.dir-share,mg=c.ing>0?net/c.ing*100:0;
       return '<tr class="clirow" data-cli="'+esc(k)+'" style="cursor:pointer" title="Ver sus movimientos"><td><b>'+esc(k)+'</b></td><td class="r">'+eur2(c.ing)+'</td><td class="r">'+eur2(c.dir)+'</td><td class="r">'+eur2(share)+'</td>'+
         '<td class="r"><b style="color:'+(net>=0?"var(--good-ink)":"var(--crit)")+'">'+eur2(net)+'</b></td>'+
@@ -949,6 +952,15 @@
     var totIng=d.ingTot,totDir=names.reduce(function(a,k){return a+d.by[k].dir;},0),totNet=totIng-totDir-d.ind;
     html+='<tr style="border-top:2px solid var(--line-strong)"><td><b>Total</b></td><td class="r"><b>'+eur2(totIng)+'</b></td><td class="r"><b>'+eur2(totDir)+'</b></td><td class="r"><b>'+eur2(d.ind)+'</b></td><td class="r"><b>'+eur2(totNet)+'</b></td><td class="r"><b>'+(totIng>0?Math.round(totNet/totIng*100)+"%":"—")+'</b></td></tr>';
     $("#cliBody").innerHTML=html;
+    // Gráfico: neto por cliente en barras horizontales (ingresos de fondo como referencia)
+    var maxIng=Math.max.apply(null,names.map(function(k){return d.by[k].ing;}).concat([1]));
+    $("#chartCli").innerHTML=names.map(function(k){ var c=d.by[k],share=d.ingTot>0?d.ind*(c.ing/d.ingTot):0,net=c.ing-c.dir-share;
+      var wIng=Math.max(0,c.ing/maxIng*100),wNet=Math.max(0,Math.min(wIng,Math.abs(net)/maxIng*100));
+      return '<div class="hbar"><span class="hlab">'+esc(k)+'</span>'+
+        '<div class="htrack"><i style="width:'+wIng+'%;background:color-mix(in srgb,var(--income) 22%,transparent)"></i>'+
+        '<i style="width:'+wNet+'%;background:'+(net>=0?"var(--income)":"var(--crit)")+'"></i></div>'+
+        '<span class="hval num" style="color:'+(net>=0?"var(--good-ink)":"var(--crit)")+'">'+eur(net)+'</span></div>'; }).join("")+
+      '<div class="legend" style="margin-top:8px"><span><i class="dot" style="background:var(--income)"></i> Neto</span><span><i class="dot" style="background:color-mix(in srgb,var(--income) 22%,transparent)"></i> Ingresos</span></div>';
     $$("#cliBody .clirow").forEach(function(tr){ tr.addEventListener("click",function(){
       var k=tr.dataset.cli;
       fltCliente=(k==="— sin cliente")?"__sin__":k; fltTipo=""; fltNat="";
@@ -1364,12 +1376,8 @@
     toast("Copia restaurada: "+state.items.length+" movimientos"); }
 
   // ---- sync UI ----
-  function setSync(st){ var d=$("#syncDot"),b=$("#bannerTxt");
-    if(!syncUrl){ d.className="syncdot"; b.innerHTML='<b>Modo local.</b> Datos en este dispositivo. Conecta la hoja de Google (⋯) para compartir con Bea. Cifras iniciales de ejemplo.'; return; }
-    d.className="syncdot on";
-    var fuente=/\/api$/.test(syncUrl)?"el servidor del Mac":"la hoja de Google";
-    var msg={push:"Guardando en "+fuente+"…",pull:"Leyendo "+fuente+"…",ok:"Sincronizado con "+fuente+".",err:"Sin conexión con "+fuente+" — trabajando en local."}[st]||"";
-    b.innerHTML='<b>'+msg+'</b> Datos compartidos del equipo.'; }
+  function setSync(st){ // el banner se retiró: solo avisamos si falla la sincronización
+    if(st==="err") toast("Sin conexión — trabajando en local"); }
 
   function yearsAvailable(){
     var ys={}; ys[state.year]=1; ys[new Date().getFullYear()]=1;
@@ -1457,7 +1465,6 @@
 
   // ---- init ----
   // en local el hub cuelga de ../hub/; en Pages la carpeta dashboard es la raíz del sitio
-  if(/\/dashboard\//.test(location.pathname))$("#hubLink").href="../hub/";
   setSync();
   buildYears();
   buildQuarters();
